@@ -1,0 +1,41 @@
+{
+
+    "exe_default" : "climber.x",
+
+    "par_path_as_argument" : false,
+
+    "exe_aliases" : 
+        {   "climber" : "climber.x",
+            "cx"      : "climber.x",
+            "mapping" : "mapping.x"
+        },
+    
+    "grp_aliases" :
+        {   "ctl"  : "control",
+            "atm"  : "atm_par",
+            "bgc"  : "bgc_par",
+            "geo"  : "geo_par",
+            "imo"  : "imo_par",
+            "lnd"  : "lnd_par",
+            "ocn"  : "ocn_par",
+            "sic"  : "sic_par",
+            "smb"  : "smb_par",
+            "hose" : "hyster_hosing"
+        },
+
+    "par_paths" :
+        {   "alias"  : "None"
+        },
+
+    "files" : 
+        ["None"], 
+
+    "dir-special" :
+    {
+        "None" : "target_dir_name"
+    },
+
+    "links" : 
+        ["None"]
+
+}
