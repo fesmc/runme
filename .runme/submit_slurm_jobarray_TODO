@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --job-name=my_array_job              # Job name
+#SBATCH --output=logs/output_%A_%a.out       # Standard output log (%A=job ID, %a=array index)
+#SBATCH --error=logs/error_%A_%a.err         # Standard error log
+#SBATCH --array=0-99%10                      # Array range (0 to 99), max 10 running at once
+#SBATCH --time=01:00:00                      # Time limit hrs:min:sec
+#SBATCH --partition=standard                 # Partition name
+#SBAtCH --qos=medium                    # QOS Name
+#SBATCH --ntasks=1                           # Run a single task
+#SBATCH --cpus-per-task=1                    # Number of CPU cores per task
+#SBATCH --mem=2G                             # Memory per node
+#SBATCH --mail-type=FAIL                     # Email on failure
+#SBATCH --mail-user=you@example.com          # Where to send mail
+
+# Load modules if needed
+# module load your_module
+
+# Define task-specific logic
+echo "Starting task ID: $SLURM_ARRAY_TASK_ID"
+
+# Example: read parameters from a file
+PARAM_FILE=params.txt
+PARAM=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" $PARAM_FILE)
+
+# Run the actual command
+./your_program "$PARAM"
+
+echo "Finished task ID: $SLURM_ARRAY_TASK_ID"
