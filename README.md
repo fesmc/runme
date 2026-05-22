@@ -21,9 +21,9 @@ This puts the `runme` command on your path.
 ## How to get started
 
 In your model directory, create a `.runme/` directory with a single file,
-`info.json` (an example is provided in this repository as
-`.runme/my_model_info.json`), describing the executables, the parameter files to
-copy, and the input folders to link:
+`info.json` (an example is provided in this repository as `.runme/info.json`),
+describing the executables, the parameter files to copy, and the input folders
+to link:
 
 ```json
 {
