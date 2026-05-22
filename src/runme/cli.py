@@ -205,11 +205,29 @@ def main(argv=None):
     if argv and argv[0] == "product":
         return _sample.main_product(argv[1:])
 
+    # --version works from anywhere, without a project configuration.
+    if "-V" in argv or "--version" in argv:
+        print("runme " + __version__)
+        return
+
     # Informational options (--list / --config) short-circuit before config/-o.
     if _config.handle_info_options():
         return
 
-    hpc_config, hpc_queues, info = _config.load()
+    # Load config. The full parser's help text and defaults come from it, so it
+    # is required for a real run; tolerate its absence only so that --help can
+    # still display the generic options outside a project directory.
+    want_help = "-h" in argv or "--help" in argv
+    try:
+        hpc_config, hpc_queues, info = _config.load()
+    except Exception:
+        if not want_help:
+            raise
+        hpc_config = {"omp": 1, "email": "", "account": "", "jobname": "", "mail_type": []}
+        hpc_queues = {"job_template": ""}
+        info = {"exe_default": None, "exe_aliases": {},
+                "par_path_as_argument": False, "grp_aliases": {}}
+
     parser = build_parser(hpc_config, info)
     args = parser.parse_args(argv)
 
