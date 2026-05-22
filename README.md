@@ -20,10 +20,27 @@ This puts the `runme` command on your path.
 
 ## How to get started
 
-In your model directory, create a `.runme/` directory with a single file,
-`info.json` (an example is provided in this repository as `.runme/info.json`),
-describing the executables, the parameter files to copy, and the input folders
-to link:
+The quickest way is `runme --init` in your model directory. It creates a
+`.runme/` directory with templates to edit:
+
+```bash
+cd $MODEL_PATH
+runme --init        # creates .runme/{info.json, runme_config, queues.json}
+# edit .runme/info.json for your model; set hpc/account in .runme/runme_config
+runme --config      # creates your local .runme_config from the template
+```
+
+Run `runme --init` again at any time to validate the configuration: it reports
+missing files or keys, flags unset placeholders, checks that your `hpc` exists in
+the queues file, and fills in any genuinely-missing template files (without
+overwriting existing ones).
+
+The rest of this section explains the files `--init` scaffolds.
+
+### info.json
+
+`.runme/info.json` describes the executables, the parameter files to copy, and
+the input folders to link. It is the one genuinely project-specific file:
 
 ```json
 {

@@ -95,6 +95,8 @@ def build_parser(hpc_config, info):
                         help='HPC account (overrides config).')
     parser.add_argument('-v', action="store_true", help='Verbose script output?')
     parser.add_argument('--debug', action="store_true", help='Print a full traceback on error.')
+    parser.add_argument('--init', action="store_true",
+                        help='Create or validate the .runme/ configuration directory, then exit.')
     parser.add_argument('--list', nargs='?', const='__ALL__', default=None, metavar='HPC',
                         help='List queue aliases for the given HPC (or all), then exit.')
     parser.add_argument('--config', action="store_true",

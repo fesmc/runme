@@ -32,6 +32,16 @@ DEFAULT_QUEUES = ".runme/queues.json"
 USER_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "runme")
 PACKAGE_TEMPLATES = os.path.join(os.path.dirname(__file__), "templates")
 
+# Project configuration directory and the files `runme --init` scaffolds.
+RUNME_DIR = ".runme"
+INIT_TEMPLATES = ("info.json", "runme_config", "queues.json")
+
+# Required keys for validation by `runme --init`.
+REQUIRED_INFO_KEYS = ["exe_default", "par_path_as_argument", "exe_aliases",
+                      "grp_aliases", "par_paths", "files", "dir-special", "links"]
+REQUIRED_CONFIG_KEYS = ["hpc", "account", "jobname", "omp", "mem",
+                        "queues_file", "info_file", "email", "mail_type"]
+
 
 def resolve_file(path):
     """Resolve a configuration file through the fallback chain.
@@ -94,9 +104,14 @@ def handle_info_options(config_file=RUNME_CONFIG,
     """
     # Peek at argv without enforcing the full parser (which requires -o).
     peek = argparse.ArgumentParser(add_help=False)
+    peek.add_argument('--init', action='store_true')
     peek.add_argument('--list', nargs='?', const='__ALL__', default=None)
     peek.add_argument('--config', action='store_true')
     args, _ = peek.parse_known_args()
+
+    if args.init:
+        init_project()
+        return True
 
     if args.config:
         show_config(config_file, default_config_file)
@@ -161,14 +176,17 @@ def list_queues(queues_all, hpc):
 def show_config(config_file, default_config_file):
     """Print contents of the local runme config file.
 
-    If the local config file is missing, copy it from the default location (if
-    available) and then print it. Hints that edits should be made directly.
+    If the local config file is missing, copy it from the default location and
+    then print it. The default is resolved through the fallback chain (project
+    .runme/runme_config -> ~/.config/runme -> packaged template), so this works
+    even before the project has its own template.
     """
     if not os.path.isfile(config_file):
         print("Config file '{}' not found.".format(config_file))
-        if os.path.isfile(default_config_file):
-            shutil.copy(default_config_file, config_file)
-            print("Copied default from '{}' to '{}'.".format(default_config_file, config_file))
+        resolved_default = resolve_file(default_config_file)
+        if os.path.isfile(resolved_default):
+            shutil.copy(resolved_default, config_file)
+            print("Copied default from '{}' to '{}'.".format(resolved_default, config_file))
         else:
             print("Default config '{}' also not found; nothing to show.".format(default_config_file))
             sys.exit(1)
@@ -183,3 +201,108 @@ def show_config(config_file, default_config_file):
         sys.stdout.write("\n")
 
     return
+
+
+# ---------------------------------------------------------------------------
+# Project initialization / validation (`runme --init`)
+# ---------------------------------------------------------------------------
+def init_project(runme_dir=RUNME_DIR):
+    """Create or validate the project's ``.runme/`` configuration directory.
+
+    If ``.runme/`` does not exist, it is created and the minimal templates
+    (info.json, runme_config, queues.json) are copied from the package; submit
+    templates are left to the package fallback. If ``.runme/`` already exists,
+    any genuinely-missing template files are added (never overwriting), the
+    existing files are validated, and concrete fixes are suggested.
+    """
+    if not os.path.isdir(runme_dir):
+        os.makedirs(runme_dir)
+        for name in INIT_TEMPLATES:
+            shutil.copy(os.path.join(PACKAGE_TEMPLATES, name), os.path.join(runme_dir, name))
+        print("Created {}/ with templates: {}".format(runme_dir, ", ".join(INIT_TEMPLATES)))
+        print("")
+        print("Next steps:")
+        print("  1. Edit {}/info.json for your model (executables, links, parameter files)."
+              .format(runme_dir))
+        print("  2. Set 'hpc' and 'account' in {}/runme_config (see `runme --list` for queues)."
+              .format(runme_dir))
+        print("     Add your cluster to {}/queues.json if it is not listed.".format(runme_dir))
+        print("  3. Run `runme --config` to create your local {}, then run a simulation."
+              .format(RUNME_CONFIG))
+        return
+
+    print("Found existing {}/ - checking configuration...\n".format(runme_dir))
+    ok = True
+
+    # Add any genuinely-missing template files (never overwrite an existing one).
+    for name in INIT_TEMPLATES:
+        dst = os.path.join(runme_dir, name)
+        if not os.path.isfile(dst):
+            shutil.copy(os.path.join(PACKAGE_TEMPLATES, name), dst)
+            print("  [+]  created {} (was missing)".format(dst))
+
+    # Validate info.json.
+    ok &= _check_json(os.path.join(runme_dir, "info.json"), REQUIRED_INFO_KEYS, "info file")
+
+    # Validate the config: prefer the active local .runme_config, else the template.
+    if os.path.isfile(RUNME_CONFIG):
+        config_path = RUNME_CONFIG
+    else:
+        config_path = os.path.join(runme_dir, "runme_config")
+        print("  [!]  local {} not found - run `runme --config` to create it".format(RUNME_CONFIG))
+    config_ok = _check_json(config_path, REQUIRED_CONFIG_KEYS, "config file")
+    ok &= config_ok
+
+    # Cross-checks that depend on a parseable config.
+    if config_ok:
+        conf = json.load(open(config_path))
+
+        info_path = resolve_file(conf.get("info_file", ""))
+        if not os.path.isfile(info_path):
+            print("  [x]  info_file '{}' does not resolve to a file".format(conf.get("info_file")))
+            ok = False
+
+        queues_path = resolve_file(conf.get("queues_file", ""))
+        if os.path.isfile(queues_path):
+            try:
+                queues = json.load(open(queues_path))
+            except Exception as error:
+                print("  [x]  queues file '{}' is not valid JSON: {}".format(queues_path, error))
+                ok = False
+                queues = {}
+            hpc = conf.get("hpc")
+            if hpc in ("CHANGEME", "", None):
+                print("  [!]  'hpc' is still a placeholder - set it in {}".format(config_path))
+                ok = False
+            elif queues and hpc not in queues:
+                print("  [x]  hpc '{}' not found in queues. Available: {}"
+                      .format(hpc, ", ".join(queues.keys())))
+                ok = False
+        else:
+            print("  [x]  queues_file '{}' does not resolve".format(conf.get("queues_file")))
+            ok = False
+
+        if conf.get("account") in ("CHANGEME", "", None):
+            print("  [!]  'account' is still a placeholder - set it in {}".format(config_path))
+
+    print("")
+    print("All checks passed." if ok else "Some checks need attention (see above).")
+    return
+
+
+def _check_json(path, required_keys, label):
+    """Validate that a JSON file exists, parses, and has the required keys."""
+    if not os.path.isfile(path):
+        print("  [x]  {} '{}' not found".format(label, path))
+        return False
+    try:
+        data = json.load(open(path))
+    except Exception as error:
+        print("  [x]  {} '{}' is not valid JSON: {}".format(label, path, error))
+        return False
+    missing = [k for k in required_keys if k not in data]
+    if missing:
+        print("  [x]  {} '{}' missing keys: {}".format(label, path, ", ".join(missing)))
+        return False
+    print("  [ok] {} '{}'".format(label, path))
+    return True
