@@ -174,23 +174,34 @@ def list_queues(queues_all, hpc):
 
 
 def show_config(config_file, default_config_file):
-    """Print contents of the local runme config file.
+    """Create (or refresh) and print the local runme config file.
 
-    If the local config file is missing, copy it from the default location and
-    then print it. The default is resolved through the fallback chain (project
-    .runme/runme_config -> ~/.config/runme -> packaged template), so this works
-    even before the project has its own template.
+    If the local config file is missing, it is copied from the default location.
+    If it already exists, the user is asked whether to overwrite it from the
+    default before printing. The default is resolved through the fallback chain
+    (project .runme/runme_config -> ~/.config/runme -> packaged template), so
+    this works even before the project has its own template.
     """
+    resolved_default = resolve_file(default_config_file)
+
     if not os.path.isfile(config_file):
         print("Config file '{}' not found.".format(config_file))
-        resolved_default = resolve_file(default_config_file)
         if os.path.isfile(resolved_default):
             shutil.copy(resolved_default, config_file)
             print("Copied default from '{}' to '{}'.".format(resolved_default, config_file))
         else:
             print("Default config '{}' also not found; nothing to show.".format(default_config_file))
             sys.exit(1)
+    elif _confirm("Config file '{}' already exists. Overwrite from default? (Y/n) ".format(config_file)):
+        if os.path.isfile(resolved_default):
+            shutil.copy(resolved_default, config_file)
+            print("Overwrote '{}' with default from '{}'.".format(config_file, resolved_default))
+        else:
+            print("Default config '{}' not found; keeping the existing file.".format(default_config_file))
+    else:
+        print("Keeping existing '{}'.".format(config_file))
 
+    print()
     print("Current config ({}):".format(config_file))
     print("(edit this file directly to change settings)")
     print()
@@ -288,6 +299,20 @@ def init_project(runme_dir=RUNME_DIR):
     print("")
     print("All checks passed." if ok else "Some checks need attention (see above).")
     return
+
+
+def _confirm(prompt):
+    """Yes/no prompt defaulting to yes on a bare Enter.
+
+    Returns False on EOF (e.g. non-interactive stdin) so an existing file is not
+    overwritten unattended.
+    """
+    try:
+        resp = input(prompt).strip().lower()
+    except EOFError:
+        print()
+        return False
+    return resp in ("", "y", "yes")
 
 
 def _check_json(path, required_keys, label):
