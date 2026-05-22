@@ -94,6 +94,7 @@ def build_parser(hpc_config, info):
     parser.add_argument('--account', type=str, default=hpc_config["account"],
                         help='HPC account (overrides config).')
     parser.add_argument('-v', action="store_true", help='Verbose script output?')
+    parser.add_argument('--debug', action="store_true", help='Print a full traceback on error.')
     parser.add_argument('--list', nargs='?', const='__ALL__', default=None, metavar='HPC',
                         help='List queue aliases for the given HPC (or all), then exit.')
     parser.add_argument('--config', action="store_true",
@@ -198,7 +199,19 @@ def build_context(args, hpc_config, hpc_queues, info):
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
+    try:
+        return _main(argv)
+    except SystemExit:
+        raise
+    except Exception as error:
+        if "--debug" in argv:
+            raise
+        print("ERROR: " + str(error))
+        print("ERROR: use --debug to print the full traceback")
+        sys.exit(1)
 
+
+def _main(argv):
     # Subcommands generate ensemble parameter files; they need no config or -o.
     if argv and argv[0] == "sample":
         return _sample.main_sample(argv[1:])

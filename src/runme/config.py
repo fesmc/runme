@@ -62,10 +62,10 @@ def load(config_file=RUNME_CONFIG):
     """
     if not os.path.isfile(config_file):
         error_msg = (
-            "Required json file containing hpc job defaults not found: {} \n".format(config_file) +
-            "This is probably the first time you are running this script. \n" +
-            "Copy the default file from the .runme config directory using the following command, \n" +
-            "check the settings and then try again: \n\n cp {} {} \n".format(DEFAULT_CONFIG, config_file)
+            "Required configuration file not found: {}\n".format(config_file) +
+            "This is probably the first time you are running runme here.\n" +
+            "Run `runme --config` to create it from the default and show its "
+            "contents, then edit the settings and try again."
         )
         raise Exception(error_msg)
 
