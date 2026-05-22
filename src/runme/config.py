@@ -222,9 +222,15 @@ def init_project(runme_dir=RUNME_DIR):
 
     If ``.runme/`` does not exist, it is created and the minimal templates
     (info.json, runme_config, queues.json) are copied from the package; submit
-    templates are left to the package fallback. If ``.runme/`` already exists,
-    any genuinely-missing template files are added (never overwriting), the
-    existing files are validated, and concrete fixes are suggested.
+    templates are left to the package fallback.
+
+    If ``.runme/`` already exists, it is validated: the config (``.runme_config``
+    or the ``.runme/runme_config`` template) is read to find the *configured*
+    info file -- which need not be the generic ``info.json`` -- and that file is
+    checked. A template is scaffolded only for files that are genuinely missing
+    (the config template if there is none, or the configured info file at its
+    own path); the queues file is left to resolve through the package fallback.
+    Nothing existing is overwritten, and concrete fixes are suggested.
     """
     if not os.path.isdir(runme_dir):
         os.makedirs(runme_dir)
@@ -245,21 +251,17 @@ def init_project(runme_dir=RUNME_DIR):
     print("Found existing {}/ - checking configuration...\n".format(runme_dir))
     ok = True
 
-    # Add any genuinely-missing template files (never overwrite an existing one).
-    for name in INIT_TEMPLATES:
-        dst = os.path.join(runme_dir, name)
-        if not os.path.isfile(dst):
-            shutil.copy(os.path.join(PACKAGE_TEMPLATES, name), dst)
-            print("  [+]  created {} (was missing)".format(dst))
-
-    # Validate info.json.
-    ok &= _check_json(os.path.join(runme_dir, "info.json"), REQUIRED_INFO_KEYS, "info file")
+    # Ensure there is a config to read (its name is fixed: .runme/runme_config).
+    config_template = os.path.join(runme_dir, "runme_config")
+    if not os.path.isfile(RUNME_CONFIG) and not os.path.isfile(config_template):
+        shutil.copy(os.path.join(PACKAGE_TEMPLATES, "runme_config"), config_template)
+        print("  [+]  created {} (was missing)".format(config_template))
 
     # Validate the config: prefer the active local .runme_config, else the template.
     if os.path.isfile(RUNME_CONFIG):
         config_path = RUNME_CONFIG
     else:
-        config_path = os.path.join(runme_dir, "runme_config")
+        config_path = config_template
         print("  [!]  local {} not found - run `runme --config` to create it".format(RUNME_CONFIG))
     config_ok = _check_json(config_path, REQUIRED_CONFIG_KEYS, "config file")
     ok &= config_ok
@@ -268,11 +270,19 @@ def init_project(runme_dir=RUNME_DIR):
     if config_ok:
         conf = json.load(open(config_path))
 
-        info_path = resolve_file(conf.get("info_file", ""))
-        if not os.path.isfile(info_path):
-            print("  [x]  info_file '{}' does not resolve to a file".format(conf.get("info_file")))
-            ok = False
+        # The info file is whatever the config points to (not necessarily the
+        # generic info.json). Only scaffold a template when that file is absent.
+        info_file = conf.get("info_file") or os.path.join(runme_dir, "info.json")
+        if not os.path.isfile(info_file):
+            parent = os.path.dirname(info_file)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            shutil.copy(os.path.join(PACKAGE_TEMPLATES, "info.json"), info_file)
+            print("  [+]  created {} from template (was missing)".format(info_file))
+        ok &= _check_json(info_file, REQUIRED_INFO_KEYS, "info file")
 
+        # The queues file resolves through the project or the packaged fallback,
+        # so a project need not carry its own copy.
         queues_path = resolve_file(conf.get("queues_file", ""))
         if os.path.isfile(queues_path):
             try:
@@ -295,6 +305,10 @@ def init_project(runme_dir=RUNME_DIR):
 
         if conf.get("account") in ("CHANGEME", "", None):
             print("  [!]  'account' is still a placeholder - set it in {}".format(config_path))
+    else:
+        # Config unreadable: can't tell which info file it expects, so fall back
+        # to checking the generic name.
+        ok &= _check_json(os.path.join(runme_dir, "info.json"), REQUIRED_INFO_KEYS, "info file")
 
     print("")
     print("All checks passed." if ok else "Some checks need attention (see above).")
