@@ -13,10 +13,15 @@ self-contained: the ensemble functionality that used to require the separate
 ## Install
 
 ```bash
-pip install git+https://github.com/alex-robinson/runme
+pip install git+https://github.com/fesmc/runme
 ```
 
-This puts the `runme` command on your path.
+This puts the `runme` command on your path. To upgrade later, add `--upgrade` (or
+`--force-reinstall`) to the same command. The only dependencies are `numpy`,
+`scipy`, and `tabulate`, all installed automatically.
+
+Once installed, `runme --init` scaffolds a project (see below), `runme --config`
+manages your local settings, and `runme --list` shows the available HPC queues.
 
 ## How to get started
 
@@ -108,9 +113,23 @@ The steps carried out are:
    just stage everything).
 
 Parameters can be modified inline with `-p KEY=VALUE [KEY=VALUE ...]`; the changes
-are written to the parameter file copied into the run directory. Each run
-directory also gets a `runme.json` record and `params.txt` / `info.txt` tables
-describing the run.
+are written to the parameter file copied into the run directory.
+
+### What gets produced
+
+Every run directory — for a single simulation or for each ensemble member — is
+self-describing and contains:
+
+- the executable, the (parameter-edited) parameter files, and the input-data links;
+- `runme.json` — a machine-readable record of the run: the full `runme` command,
+  the model command line, the applied parameters, the git revision, and a status
+  (`staged` / `prepared` / `running` / `submitted`);
+- `params.txt` — a one-row table of the parameter names and values for this run;
+- `info.txt` — the same row prefixed with the `runid` and suffixed with the
+  `rundir`, so a directory can be located and loaded uniformly.
+
+Because single simulations and ensemble members write the same files, downstream
+tooling can load any run directory the same way.
 
 ## Ensembles
 
@@ -193,3 +212,17 @@ and ranges (`a=0:10:5`) are also accepted.
 
 Add `--dry-run` to print what would be staged and run for each member without
 creating or running anything.
+
+## Acknowledgments
+
+`runme` builds on the [`runner`](https://github.com/perrette/runner) package by
+Mahé Perrette, a flexible framework for sampling parameters and for running and
+analyzing model ensembles. `runme` reimplements a focused subset of that
+functionality — factorial combination, Latin-hypercube and Monte-Carlo sampling,
+and ensemble execution — while stripping away the more complex methods (Bayesian
+analysis, iterative importance sampling, weighted resampling). Here the ensemble
+"run" step is handled simply by calling `runme` itself, rather than by wrapping a
+separate per-simulation script.
+
+If you need those more advanced methods, use the original
+[`perrette/runner`](https://github.com/perrette/runner) package directly.
