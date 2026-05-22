@@ -64,13 +64,28 @@ def str_dataframe(pnames, pmatrix, max_rows=int(1e20), include_index=False, inde
 
 
 def read_dataframe(pfile):
-    header = open(pfile).readline().strip()
+    """Read a fixed-width table, preserving per-value types.
+
+    Each cell is coerced with :func:`runme.dist.parse_val` (int -> int,
+    float -> float, else str), so integer parameters stay integers and string
+    parameters are supported (unlike a plain ``np.loadtxt`` read).
+    """
+    from runme.dist import parse_val
+
+    lines = open(pfile).read().splitlines()
+    if not lines:
+        return [], []
+    header = lines[0].strip()
     if header.startswith('#'):
         header = header[1:]
     pnames = header.split()
-    pvalues = np.loadtxt(pfile, skiprows=1)
-    if np.ndim(pvalues) == 1:
-        pvalues = pvalues[:, None]
+
+    pvalues = []
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        pvalues.append([parse_val(tok) for tok in line.split()])
     return pnames, pvalues
 
 
