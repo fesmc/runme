@@ -27,6 +27,31 @@ RUNME_CONFIG = ".runme_config"
 DEFAULT_CONFIG = ".runme/runme_config"
 DEFAULT_QUEUES = ".runme/queues.json"
 
+# Fallback locations for generic files (queues, submit templates): a user-wide
+# config directory and the defaults shipped inside the package.
+USER_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "runme")
+PACKAGE_TEMPLATES = os.path.join(os.path.dirname(__file__), "templates")
+
+
+def resolve_file(path):
+    """Resolve a configuration file through the fallback chain.
+
+    Order: the given (project-relative) ``path`` -> ``~/.config/runme/<name>``
+    -> the packaged ``templates/<name>`` default. Returns the first that exists,
+    or ``path`` unchanged so the caller fails with a clear error on open.
+
+    This lets a project ship only the files it customises (typically just
+    ``info.json``) and inherit generic queues/submit templates from the package.
+    """
+    if os.path.isfile(path):
+        return path
+    base = os.path.basename(path)
+    for candidate in (os.path.join(USER_CONFIG_DIR, base),
+                      os.path.join(PACKAGE_TEMPLATES, base)):
+        if os.path.isfile(candidate):
+            return candidate
+    return path
+
 
 def load(config_file=RUNME_CONFIG):
     """Load the runme configuration.
@@ -46,12 +71,14 @@ def load(config_file=RUNME_CONFIG):
 
     hpc_config = json.load(open(config_file))
 
-    # Load all queue information and extract the relevant one for the current hpc
-    queues_all = json.load(open(hpc_config["queues_file"]))
+    # Load all queue information and extract the relevant one for the current hpc.
+    # The queues file may come from the project, ~/.config/runme, or the package.
+    queues_all = json.load(open(resolve_file(hpc_config["queues_file"])))
     hpc_queues = queues_all[hpc_config["hpc"]]
 
-    # Load configuration info for the current setup (paths, links, aliases, etc)
-    info = json.load(open(hpc_config["info_file"]))
+    # Load configuration info for the current setup (paths, links, aliases, etc).
+    # info is project-specific, so this normally resolves to the project file.
+    info = json.load(open(resolve_file(hpc_config["info_file"])))
 
     return hpc_config, hpc_queues, info
 
@@ -77,7 +104,8 @@ def handle_info_options(config_file=RUNME_CONFIG,
 
     if args.list is not None:
         # Resolve queues file: prefer the path from .runme_config if present,
-        # otherwise fall back to the default location.
+        # otherwise the default; in all cases fall through the resolution chain
+        # (project -> ~/.config/runme -> packaged default).
         queues_path = default_queues_file
         if os.path.isfile(config_file):
             try:
@@ -85,6 +113,7 @@ def handle_info_options(config_file=RUNME_CONFIG,
             except Exception:
                 pass
 
+        queues_path = resolve_file(queues_path)
         if not os.path.isfile(queues_path):
             print("Queues file not found: {}".format(queues_path))
             sys.exit(1)

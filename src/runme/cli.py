@@ -189,7 +189,8 @@ def build_context(args, hpc_config, hpc_queues, info):
         qos=qos, partition=partition, wall=wall, mem=mem,
         account=args.account, omp=args.omp,
         jobname=hpc_config["jobname"], email=args.email,
-        mail_type=hpc_config["mail_type"], template=hpc_queues["job_template"],
+        mail_type=hpc_config["mail_type"],
+        template=_config.resolve_file(hpc_queues["job_template"]),
         command=" ".join(sys.argv),
     )
 
