@@ -10,6 +10,20 @@ factorial combination or by sampling parameter distributions.
 self-contained: the ensemble functionality that used to require the separate
 `runner` library (via `jobrun`) is now built in.
 
+## Acknowledgments
+
+`runme` builds on the [`runner`](https://github.com/perrette/runner) package by
+Mahé Perrette, a flexible framework for sampling parameters and for running and
+analyzing model ensembles. `runme` reimplements a focused subset of that
+functionality — factorial combination, Latin-hypercube and Monte-Carlo sampling,
+and ensemble execution — while stripping away the more complex methods (Bayesian
+analysis, iterative importance sampling, weighted resampling). Here the ensemble
+"run" step is handled simply by calling `runme` itself, rather than by wrapping a
+separate per-simulation script.
+
+If you need those more advanced methods, use the original
+[`perrette/runner`](https://github.com/perrette/runner) package directly.
+
 ## Install
 
 ```bash
@@ -212,17 +226,3 @@ and ranges (`a=0:10:5`) are also accepted.
 
 Add `--dry-run` to print what would be staged and run for each member without
 creating or running anything.
-
-## Acknowledgments
-
-`runme` builds on the [`runner`](https://github.com/perrette/runner) package by
-Mahé Perrette, a flexible framework for sampling parameters and for running and
-analyzing model ensembles. `runme` reimplements a focused subset of that
-functionality — factorial combination, Latin-hypercube and Monte-Carlo sampling,
-and ensemble execution — while stripping away the more complex methods (Bayesian
-analysis, iterative importance sampling, weighted resampling). Here the ensemble
-"run" step is handled simply by calling `runme` itself, rather than by wrapping a
-separate per-simulation script.
-
-If you need those more advanced methods, use the original
-[`perrette/runner`](https://github.com/perrette/runner) package directly.
