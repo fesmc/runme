@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "runme"
+version = "0.1.0"
+description = "Stage, run, and submit single simulations and ensembles for model projects."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Alexander Robinson" },
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "tabulate",
+]
+
+[project.scripts]
+runme = "runme.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+runme = ["templates/*"]

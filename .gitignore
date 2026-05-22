@@ -1,2 +1,12 @@
 .runme_config
-.claude/worktrees
+
+# Claude Code worktrees and local artifacts
+.claude/
+logs/
+
+# Python packaging / build artifacts
+__pycache__/
+*.egg-info/
+build/
+dist/
+*.pyc
