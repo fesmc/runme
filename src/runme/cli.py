@@ -1,52 +1,66 @@
 """Command-line entrypoint for runme.
 
-Phase 2 wires up the single-simulation flow: load config, build the parser,
-stage the run directory, then run/submit (or stage only). Ensemble dispatch and
-the ``sample`` / ``product`` subcommands are added in Phase 4.
+Dispatch:
+
+* ``runme sample ...`` / ``runme product ...`` -> generate an ensemble
+  parameter file (see :mod:`runme.sample`).
+* ``runme ... -i FILE`` or any ensemble-shaped ``-p`` spec -> ensemble mode
+  (see :mod:`runme.ensemble`).
+* otherwise -> single simulation.
+
+A ``-p`` value is "ensemble-shaped" when it contains a comma (list), a colon
+(range), or ``?`` (distribution). Single-valued ``-p`` entries are fixed
+overrides applied to every run.
 """
 import os
 import sys
 import argparse
+from collections import OrderedDict as odict
 
 from runme import __version__
 from runme import config as _config
 from runme import hpc as _hpc
 from runme import stage as _stage
+from runme import run as _run
+from runme import sample as _sample
 
 
-class DictAction(argparse.Action):
-    """Parse a list of ``key=val`` parameters into a dict.
+def _is_ensemble_spec(spec):
+    """True if the value spec denotes an ensemble dimension (list/range/dist)."""
+    return (',' in spec) or ('?' in spec) or (':' in spec)
 
-    Converts values to an appropriate type (int, float, else str). For
-    single-simulation runs only one value per parameter is allowed; comma lists
-    (ensemble sweeps) are handled by the ensemble path added in Phase 4.
 
-    Adapted from
-    https://sumit-ghosh.com/articles/parsing-dictionary-key-value-pairs-kwargs-argparse-python/
+def _coerce(valstr):
+    """Coerce a single value string to int, float, or str (as the old -p did)."""
+    try:
+        value = float(valstr)
+        if value % 1 == 0 and '.' not in valstr:
+            value = int(value)
+        return value
+    except ValueError:
+        return valstr
+
+
+def classify_params(raw):
+    """Split raw ``key=spec`` entries into ensemble specs and fixed overrides.
+
+    Returns ``(ensemble_specs, fixed)`` where ``ensemble_specs`` is the list of
+    raw ``key=spec`` strings that denote ensemble dimensions and ``fixed`` is an
+    ordered dict of single-valued overrides.
     """
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, dict())
-        for value in values:
-            key, valstr = value.split('=')
-            if ',' in valstr:
-                raise Exception('Only one value allowed for each parameter using -p: {}={}'.format(key, valstr))
-            try:
-                value = float(valstr)
-                if value % 1 == 0 and '.' not in valstr:
-                    value = int(value)
-            except ValueError:
-                value = valstr
-            getattr(namespace, self.dest)[key] = value
+    ensemble_specs = []
+    fixed = odict()
+    for item in raw or []:
+        key, spec = item.split('=', 1)
+        if _is_ensemble_spec(spec):
+            ensemble_specs.append(item)
+        else:
+            fixed[key] = _coerce(spec)
+    return ensemble_specs, fixed
 
 
 def build_parser(hpc_config, info):
-    """Build the single-simulation argument parser.
-
-    Defaults for ``--omp`` / ``--email`` / ``--account`` come from the loaded
-    config; the executable-alias help text and the conditional ``-n`` argument
-    come from the model info.
-    """
+    """Build the run argument parser (single-sim and ensemble share it)."""
     exe_aliases_str = "; ".join(
         "{}={}".format(key, val) for key, val in info["exe_aliases"].items()
     )
@@ -54,45 +68,60 @@ def build_parser(hpc_config, info):
     parser = argparse.ArgumentParser(
         prog="runme",
         description="Stage, run, and submit single simulations and ensembles.",
-    )
+        epilog="Subcommands: 'runme sample' and 'runme product' generate ensemble parameter files.")
 
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
     parser.add_argument('-e', '--exe', type=str, default=info['exe_default'],
-                        help="Define the executable file to use here. Shortcuts: " + exe_aliases_str)
+                        help="Executable file to use. Shortcuts: " + exe_aliases_str)
     parser.add_argument('-r', '--run', action="store_true",
                         help='Run the executable after preparing the job?')
     parser.add_argument('-s', '--submit', action="store_true",
-                        help='Run the executable after preparing the job by submitting to the queue?')
+                        help='Prepare a submit script (and submit it, with -r) instead of running directly?')
     parser.add_argument('-q', '--queue', type=str, default=None,
                         help='Alias of the queue the job should be submitted to.')
     parser.add_argument('-w', '--wall', type=str, default=None,
-                        help='HPC wall time "hh:mm:ss" (overrides settings given by queue alias)')
+                        help='HPC wall time "hh:mm:ss" (overrides queue alias)')
     parser.add_argument('--part', type=str, metavar="PARTITION", default=None,
-                        help='HPC partition specification (overrides settings given by queue alias)')
+                        help='HPC partition (overrides queue alias)')
     parser.add_argument('--qos', type=str, metavar="QOS", default=None,
-                        help='HPC quality of service specification (overrides settings given by queue alias)')
+                        help='HPC quality of service (overrides queue alias)')
     parser.add_argument('-m', '--mem', type=str, metavar="MEM", default=None,
-                        help='HPC max memory per node specification (overrides settings given by queue alias)')
+                        help='HPC max memory per node (overrides queue alias)')
     parser.add_argument('--omp', type=int, metavar="OMP", default=hpc_config["omp"],
-                        help='Number of threads for OpenMP (default = 1 implies no parallel computation)')
+                        help='Number of OpenMP threads (default = 1 implies no parallel computation)')
     parser.add_argument('--email', type=str, default=hpc_config["email"],
-                        help='Email address for job notifications (overrides config settings).')
+                        help='Email for job notifications (overrides config).')
     parser.add_argument('--account', type=str, default=hpc_config["account"],
-                        help='HPC account associated with job (overrides config settings).')
+                        help='HPC account (overrides config).')
     parser.add_argument('-v', action="store_true", help='Verbose script output?')
     parser.add_argument('--list', nargs='?', const='__ALL__', default=None, metavar='HPC',
-                        help='List queue aliases for the given HPC, or for all HPCs if no name is provided, then exit.')
+                        help='List queue aliases for the given HPC (or all), then exit.')
     parser.add_argument('--config', action="store_true",
                         help='Show the current {} (copying the default from {} if missing), then exit.'.format(
                             _config.RUNME_CONFIG, _config.DEFAULT_CONFIG))
 
-    parser.add_argument("-p", metavar="KEY=VALUE", nargs='+', action=DictAction,
-                        help="Set a number of key-value pairs (no spaces around the = sign). "
-                             'If a value contains spaces, quote it: foo="this is a sentence".')
+    # Ensemble options
+    grp = parser.add_argument_group('ensemble options')
+    grp.add_argument('-i', '--params-file', dest='params_file', default=None,
+                     help='Run an ensemble from a parameter file (e.g. from `runme sample`).')
+    grp.add_argument('-j', '--id', dest='runid', default=None,
+                     metavar="I,J,...,START-STOP:STEP",
+                     help='Select ensemble members to run (0-based; slurm --array syntax).')
+    grp.add_argument('-a', '--auto-dir', dest='auto_dir', action='store_true',
+                     help='Name run directories from parameter values instead of run id.')
+    grp.add_argument('--include-default', dest='include_default', action='store_true',
+                     help='Also run a "default" member with fixed parameters only.')
+    grp.add_argument('--dry-run', dest='dry_run', action='store_true',
+                     help='Show what would be done without creating or running anything.')
+
+    parser.add_argument("-p", metavar="KEY=VALUE", nargs='+',
+                        help="Set parameters. A single value is a fixed override applied to every run; "
+                             "a comma list (a=1,2,3), range (a=0:10:5), or distribution (a=U?0,1) defines "
+                             "an ensemble dimension.")
 
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument('-o', dest='rundir', metavar='RUNDIR', type=str, required=True,
-                               help='Path where simulation will run and store output.')
+    requiredNamed.add_argument('-o', dest='rundir', metavar='RUNDIR/OUTDIR', type=str, required=True,
+                               help='Run directory (single sim) or experiment directory (ensemble).')
 
     if info["par_path_as_argument"] is True:
         requiredNamed.add_argument('-n', dest='par_path', metavar='PAR_PATH', type=str, required=True,
@@ -101,65 +130,40 @@ def build_parser(hpc_config, info):
     return parser
 
 
-def main(argv=None):
-    # Informational options (--list / --config) short-circuit before requiring
-    # config files or -o.
-    if _config.handle_info_options():
-        return
+def build_context(args, hpc_config, hpc_queues, info):
+    """Resolve the member-independent run context shared by all runs.
 
-    # Load configuration (raises a helpful message if .runme_config is missing).
-    hpc_config, hpc_queues, info = _config.load()
-
-    parser = build_parser(hpc_config, info)
-    args = parser.parse_args(argv)
-
-    # Options
-    exe_path = args.exe
-    run = args.run
-    submit = args.submit
-    omp = args.omp
-    par = args.p
-    rundir = args.rundir
-    par_path = getattr(args, 'par_path', None)
-
-    # Config-derived job settings
-    mail_type = hpc_config["mail_type"]
-    jobname = hpc_config["jobname"]
-    path_jobscript_template = hpc_queues["job_template"]
-
+    Expands the executable alias, builds the executable command line, resolves
+    queue settings (when submitting), and validates input files. Returns an
+    ``argparse.Namespace``.
+    """
     copy_exec = True       # run the executable from inside the run directory
     with_profiler = False  # vtune profiler prefix (disabled)
 
-    # Resolve queue settings only when submitting.
-    qos = partition = wall = mem = None
-    if submit:
-        qos, partition, wall, mem = _hpc.resolve_queue(
-            hpc_queues, hpc_config, args.queue, args.qos, args.part, args.wall, args.mem)
-
-    # Expand executable alias if defined; recover the alias for par-path filtering.
+    exe_path = args.exe
     if exe_path in info["exe_aliases"]:
         exe_path = info["exe_aliases"].get(exe_path)
     exe_alias = next((k for k, v in info["exe_aliases"].items() if v == exe_path), None)
     print("exe_alias: {}".format(exe_alias))
 
     exe_fname = os.path.basename(exe_path)
+    par_path = getattr(args, 'par_path', None)
 
-    # Executable command-line argument (parameter file) when required.
+    # Executable argument (parameter file) when required. With copy_exec the run
+    # directory holds a copy, so the argument is the same for every member.
     if info["par_path_as_argument"] is True:
-        if copy_exec:
-            exe_args = os.path.basename(par_path)
-        else:
-            exe_args = os.path.join(rundir, os.path.basename(par_path))
+        exe_args = os.path.basename(par_path)
     else:
         exe_args = ""
 
-    # Profiler prefix (disabled by default).
+    profiler_prefix = ""
     if with_profiler:
-        profiler_prefix = "amplxe-cl -c hotspots -r {} -- ".format("./" if copy_exec else rundir)
-    else:
-        profiler_prefix = ""
+        profiler_prefix = "amplxe-cl -c hotspots -r {} -- ".format("./")
 
-    # Make sure input file(s) exist.
+    exe_rundir = "." if copy_exec else os.getcwd()
+    executable = "{}{}/{} {}".format(profiler_prefix, exe_rundir, exe_fname, exe_args)
+
+    # Validate inputs.
     if not os.path.isfile(exe_path):
         print("Input file does not exist: {}".format(exe_path))
         sys.exit()
@@ -167,33 +171,76 @@ def main(argv=None):
         print("Input file does not exist: {}".format(par_path))
         sys.exit()
 
-    # 1. Stage the run directory.
-    _stage.stage_rundir(rundir, info, exe_path, exe_alias,
-                        par_path=par_path, params=par,
-                        grp_aliases=info["grp_aliases"], create=True)
+    # Queue settings (only needed when submitting).
+    qos = partition = wall = mem = None
+    if args.submit:
+        qos, partition, wall, mem = _hpc.resolve_queue(
+            hpc_queues, hpc_config, args.queue, args.qos, args.part, args.wall, args.mem)
 
-    # 2. Build the executable command.
-    exe_rundir = "." if copy_exec else os.getcwd()
-    executable = "{}{}/{} {}".format(profiler_prefix, exe_rundir, exe_fname, exe_args)
+    return argparse.Namespace(
+        info=info,
+        exe_path=exe_path,
+        exe_alias=exe_alias,
+        par_path=par_path,
+        executable=executable,
+        run=args.run,
+        submit=args.submit,
+        dry_run=args.dry_run,
+        qos=qos, partition=partition, wall=wall, mem=mem,
+        account=args.account, omp=args.omp,
+        jobname=hpc_config["jobname"], email=args.email,
+        mail_type=hpc_config["mail_type"], template=hpc_queues["job_template"],
+        command=" ".join(sys.argv),
+    )
 
-    # 3. Run / submit / stage-only.
-    if submit:
-        _hpc.preparejob(path_jobscript_template, rundir, executable, qos, mem,
-                        wall, partition, args.account, omp, jobname, args.email, mail_type)
-        if run:
-            _hpc.submitjob(rundir)
-            status = "submitted"
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+
+    # Subcommands generate ensemble parameter files; they need no config or -o.
+    if argv and argv[0] == "sample":
+        return _sample.main_sample(argv[1:])
+    if argv and argv[0] == "product":
+        return _sample.main_product(argv[1:])
+
+    # Informational options (--list / --config) short-circuit before config/-o.
+    if _config.handle_info_options():
+        return
+
+    hpc_config, hpc_queues, info = _config.load()
+    parser = build_parser(hpc_config, info)
+    args = parser.parse_args(argv)
+
+    ensemble_specs, fixed = classify_params(args.p)
+    ctx = build_context(args, hpc_config, hpc_queues, info)
+
+    is_ensemble = bool(args.params_file) or bool(ensemble_specs)
+
+    if is_ensemble:
+        from runme import ensemble as _ensemble
+        from runme.params import XParams, MultiParam, Param
+
+        if args.params_file:
+            if ensemble_specs:
+                parser.error("in -i/--params-file mode, -p overrides must be single-valued "
+                             "(no commas, ranges, or distributions)")
+            xparams = XParams.read(args.params_file)
         else:
-            status = "prepared"
+            for spec in ensemble_specs:
+                if '?' in spec:
+                    parser.error("continuous distributions require the `sample` subcommand: "
+                                 "`runme sample ... -o FILE`, then `runme -i FILE ...`")
+            xparams = MultiParam([Param.parse(spec) for spec in ensemble_specs]).product()
+
+        indices = _ensemble.parse_slurm_array_indices(args.runid) if args.runid else None
+        _ensemble.run(ctx, xparams, fixed, expdir=args.rundir, indices=indices,
+                      autodir=args.auto_dir, include_default=args.include_default)
     else:
-        if run:
-            _hpc.runjob(rundir, executable, omp)
-            status = "running"
-        else:
-            status = "staged"
-
-    # 4. Write the per-rundir record.
-    _stage.write_record(rundir, par, " ".join(sys.argv), executable, status)
+        # Single simulation.
+        _run.execute_one(args.rundir, fixed, ctx, create=True)
+        if not ctx.dry_run:
+            _stage.write_run_tables(args.rundir, list(fixed.keys()), list(fixed.values()), runid=0)
 
     return
 

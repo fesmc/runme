@@ -18,6 +18,7 @@ from itertools import chain
 
 from runme import __version__
 from runme.namelist import param_write_to_files
+from runme.params import str_dataframe
 
 # Record file written into every run directory.
 RECORD = "runme.json"
@@ -105,6 +106,30 @@ def write_record(rundir, params, command, exe_command, status):
         json.dump(record, f, indent=2)
 
     return record
+
+
+def write_run_tables(rundir, names, values, runid=0):
+    """Write the single-row ``params.txt`` / ``info.txt`` text tables into a run
+    directory, so every rundir (single-sim or ensemble member) is loadable the
+    same way.
+
+    * ``params.txt`` : header of parameter names, one value row.
+    * ``info.txt``   : ``runid`` + parameter names + ``rundir``, one row.
+    """
+    names = list(names)
+    values = list(values)
+    rundir_label = os.path.basename(os.path.normpath(rundir))
+
+    params_txt = str_dataframe(names, [values]) if names else ""
+    with open(os.path.join(rundir, "params.txt"), 'w') as f:
+        f.write(params_txt + ("\n" if params_txt and not params_txt.endswith("\n") else ""))
+
+    info_names = ["runid"] + names + ["rundir"]
+    info_row = [runid] + values + [rundir_label]
+    with open(os.path.join(rundir, "info.txt"), 'w') as f:
+        f.write(str_dataframe(info_names, [info_row]) + "\n")
+
+    return
 
 
 # ---------------------------------------------------------------------------

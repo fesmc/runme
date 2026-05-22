@@ -15,9 +15,11 @@ Original copyright (scidoe / pyDOE):
     Copied by M. Perrette from
     https://github.com/tisimst/pyDOE/blob/master/pyDOE/doe_lhs.py
 """
+import argparse
+
 import numpy as np
 
-__all__ = ['lhs']
+__all__ = ['lhs', 'main_sample', 'main_product']
 
 
 def lhs(n, samples=None, criterion=None, iterations=None):
@@ -158,3 +160,65 @@ def _pdist(x):
             d.append((sum((x[j, :] - x[i, :]) ** 2)) ** 0.5)
 
     return np.array(d)
+
+
+# ---------------------------------------------------------------------------
+# CLI subcommands: `runme sample` and `runme product`
+# ---------------------------------------------------------------------------
+def _emit(xparams, out):
+    """Write the parameter matrix to a file, or print it to stdout."""
+    if out:
+        xparams.write(out)
+        print("Wrote {} ensemble members to {}".format(xparams.size, out))
+    else:
+        print(str(xparams))
+
+
+def main_product(argv=None):
+    """`runme product NAME=V1,V2 ... [-o FILE]` -- factorial combination."""
+    from runme.params import MultiParam, DiscreteParam
+
+    parser = argparse.ArgumentParser(
+        prog="runme product",
+        description="Generate an ensemble from all parameter combinations.")
+    parser.add_argument('factors', type=DiscreteParam.parse, metavar="NAME=VAL1[,VAL2 ...]", nargs='*')
+    parser.add_argument('-o', '--out', help="output parameter file (print otherwise)")
+    o = parser.parse_args(argv)
+
+    if not o.factors:
+        parser.error("must provide at least one parameter")
+
+    xparams = MultiParam(o.factors).product()
+    _emit(xparams, o.out)
+    return
+
+
+def main_sample(argv=None):
+    """`runme sample NAME=DIST ... -N SIZE [--seed S] [--method ...] [-o FILE]`."""
+    from runme.params import MultiParam, Param
+
+    parser = argparse.ArgumentParser(
+        prog="runme sample",
+        description="Sample an ensemble from prior parameter distributions.")
+    parser.add_argument('dist', type=Param.parse, metavar="NAME=DIST", nargs='*',
+                        help="e.g. a=U?0,1 (uniform), b=N?0,1 (normal), c=1,2,3 (discrete)")
+    parser.add_argument('-N', '--size', type=int, help="sample size")
+    parser.add_argument('--seed', type=int, help="random seed for reproducible results")
+    parser.add_argument('--method', choices=['montecarlo', 'lhs'], default='lhs',
+                        help="sampling method (default=%(default)s)")
+    parser.add_argument('--lhs-criterion',
+                        choices=('center', 'c', 'maximin', 'm', 'centermaximin', 'cm', 'correlate', 'corr'),
+                        help='LHS criterion (randomized by default)')
+    parser.add_argument('--lhs-iterations', type=int, help='iterations for maximin/correlate criteria')
+    parser.add_argument('-o', '--out', help="output parameter file (print otherwise)")
+    o = parser.parse_args(argv)
+
+    if not o.size:
+        parser.error("argument -N/--size is required")
+    if not o.dist:
+        parser.error("must provide at least one parameter")
+
+    xparams = MultiParam(o.dist).sample(o.size, seed=o.seed, method=o.method,
+                                        criterion=o.lhs_criterion, iterations=o.lhs_iterations)
+    _emit(xparams, o.out)
+    return
