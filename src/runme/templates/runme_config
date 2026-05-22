@@ -1,0 +1,13 @@
+{
+    "hpc"           : "CHANGEME",
+    "account"       : "CHANGEME",
+    "jobname"       : "model",
+    "omp"           : 0,
+    "mem"           : -1,
+
+    "queues_file"   : ".runme/queues.json",
+    "info_file"     : ".runme/info.json",
+
+    "email"         : "",
+    "mail_type"     : ["FAIL"]
+}

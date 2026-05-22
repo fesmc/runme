@@ -1,119 +1,228 @@
 # runme
 
-`runme` is a general script to perform all preiminary steps needed to run a program, and then to run it.
-In fact, it is almost too simple. But we have found it useful in many contexts so it seemed worth it to make it available and general to facilitate any further development.
-`runme` is written in Python and makes use of a couple of JSON configuration files to make it extensible.
+`runme` performs the preliminary steps needed to run a model program — create a
+run directory, copy the executable and parameter files, link input data — and
+then runs it, either in the background or by submitting to a SLURM queue. It can
+run a single simulation or a whole ensemble, and can generate ensembles by
+factorial combination or by sampling parameter distributions.
+
+`runme` is an installable Python package providing the `runme` command. It is
+self-contained: the ensemble functionality that used to require the separate
+`runner` library (via `jobrun`) is now built in.
+
+## Install
+
+```bash
+pip install git+https://github.com/fesmc/runme
+```
+
+This puts the `runme` command on your path. To upgrade later, add `--upgrade` (or
+`--force-reinstall`) to the same command. The only dependencies are `numpy`,
+`scipy`, and `tabulate`, all installed automatically.
+
+Once installed, `runme --init` scaffolds a project (see below), `runme --config`
+manages your local settings, and `runme --list` shows the available HPC queues.
 
 ## How to get started
 
-First copy the `runme` script and the `.runme` configuration directory to your model directory, where you would like to launch simulations from:
+The quickest way is `runme --init` in your model directory. It creates a
+`.runme/` directory with templates to edit:
 
-```
-cp runme $MODEL_PATH/
-cp -r .runme $MODEL_PATH/
-```
-
-Next modify the choices in the file `$MODEL_PATH/.runme/my_model_info.json`, which describe names of executables, folders to be copied/linked to run directories, parameter files to be copied, etc.
-
-Finally, copy the user configuration file to the main directory and enter the name of the HPC you are using, your email address etc.:
-
-```
+```bash
 cd $MODEL_PATH
-cp .runme/runme_config .runme_config
+runme --init        # creates .runme/{info.json, runme_config, queues.json}
+# edit .runme/info.json for your model; set hpc/account in .runme/runme_config
+runme --config      # creates your local .runme_config from the template
 ```
 
-That's it! `runme` should now be ready for use with your model. Note:
+Run `runme --init` again at any time to validate the configuration: it reports
+missing files or keys, flags unset placeholders, checks that your `hpc` exists in
+the queues file, and fills in any genuinely-missing template files (without
+overwriting existing ones).
 
-- If you will use a new HPC that is not listed in `.runme/queues.json`, then please add it to the file together with relevant settings for the different job queues available. Please add it as an issue here, so that the repository can be continuously updated with new HPC information.
-- You can make your own job submission templates in `.runme/` (see `submit_slurm` and `submit_slurm_omp`) if something specific is needed for your HPC and/or model. To use a custom job submission templates, make sure to point to them in the `.runme/queues.json` options.
- 
-## Basic uses
+The rest of this section explains the files `--init` scaffolds.
 
-Once an executable has been created, you can prepare an experiment and run it using the included Python job submission script `runme`. The following steps are carried out via the script:
+### info.json
 
-1. The run directory directory is created.
-2. The executable is copied to the run directory.
-3. The relevant parameter files are copied to the run directory.
-4. Links to the input data paths are created in the run directory.
-5. The executable is run from the run directory, either as a background process or it is submitted to a queue via sbatch (the SLURM workload manager).
+`.runme/info.json` describes the executables, the parameter files to copy, and
+the input folders to link. It is the one genuinely project-specific file:
 
-Importantly, it is possible to modify parameters in a parameter file inline via the option -p KEY=VAL [KEY=VAL ...]. The modified parameters will be written to the file stored in the run directory.
+```json
+{
+    "exe_default" : "libmodel/bin/model.x",
+    "par_path_as_argument" : true,
+    "exe_aliases" : { "main" : "libmodel/bin/model.x" },
+    "grp_aliases" : {},
+    "par_paths" : { "alias" : "None" },
+    "files" : ["None"],
+    "dir-special" : { "None" : "target_dir_name" },
+    "links" : ["input", "ice_data", "maps"]
+}
+```
+
+Then create a local `.runme_config` with your per-host settings (the HPC name,
+account, email, OpenMP threads, and the paths to your info and queues files):
+
+```json
+{
+    "hpc"         : "dkrz_levante",
+    "account"     : "ba1442",
+    "jobname"     : "model",
+    "omp"         : 16,
+    "mem"         : -1,
+    "queues_file" : ".runme/queues.json",
+    "info_file"   : ".runme/info.json",
+    "email"       : "",
+    "mail_type"   : ["FAIL", "REQUEUE"]
+}
+```
+
+That's it. The queues definition and SLURM submit templates are shipped with the
+package, so you don't need to copy them into every project. `runme` resolves each
+configuration file through a fallback chain:
+
+1. the path given in `.runme_config` (your project's `.runme/`),
+2. `~/.config/runme/<name>` (a user-wide override),
+3. the default bundled in the package.
+
+So a project usually carries only `.runme/info.json` and `.runme_config`. Provide
+your own `.runme/queues.json` or `.runme/submit_slurm[_omp]` only when you need to
+override the packaged defaults.
+
+- Inspect available queues with `runme --list` (or `runme --list HPC`).
+- Inspect the active config with `runme --config`.
+- If you use a new HPC not in the packaged `queues.json`, add it (and please open
+  an issue/PR so the package stays up to date).
+
+## Running a single simulation
+
+```bash
+runme -o output/run -n par/model.nml            # stage only (create rundir, copy files)
+runme -r -o output/run -n par/model.nml         # stage and run in the background
+runme -s -o output/run -n par/model.nml -q short  # stage and write a SLURM submit script
+runme -r -s -o output/run -n par/model.nml -q short  # stage, write submit script, and sbatch it
+```
+
+The steps carried out are:
+
+1. create the run directory,
+2. copy the executable into it,
+3. copy the relevant parameter files,
+4. link the input-data folders,
+5. run in the background or submit to the queue (or, with neither `-r` nor `-s`,
+   just stage everything).
+
+Parameters can be modified inline with `-p KEY=VALUE [KEY=VALUE ...]`; the changes
+are written to the parameter file copied into the run directory.
+
+### What gets produced
+
+Every run directory — for a single simulation or for each ensemble member — is
+self-describing and contains:
+
+- the executable, the (parameter-edited) parameter files, and the input-data links;
+- `runme.json` — a machine-readable record of the run: the full `runme` command,
+  the model command line, the applied parameters, the git revision, and a status
+  (`staged` / `prepared` / `running` / `submitted`);
+- `params.txt` — a one-row table of the parameter names and values for this run;
+- `info.txt` — the same row prefixed with the `runid` and suffixed with the
+  `rundir`, so a directory can be located and loaded uniformly.
+
+Because single simulations and ensemble members write the same files, downstream
+tooling can load any run directory the same way.
 
 ## Ensembles
 
-Ensembles of simulations can be performed by calling `runme` via the Python module `runner`, which is designed for generating and managing ensembles. To install `runner` and its dependency `tabulate`, simply run the following:
-
-```
-pip install https://github.com/alex-robinson/runner/archive/refs/heads/master.zip
-pip install tabulate
-```
-
-#### Using `jobrun` with `runme`
-
-`jobrun` is a command that is part of the Python `runner` library, found here:
-[https://github.com/alex-robinson/runner](https://github.com/alex-robinson/runner). This command facilitates running ensembles of simulations, or simulations with modified parameters via a convenient command-line interface. See the above `runner` page for its installation instructions.
-
-using `jobrun`, the following command would produce the same simulation as `./runme -s RUNDIR`:
+Any `-p` value that is a comma list, a range, or a distribution turns the run into
+an ensemble. The output directory `-o OUTDIR` then holds one run directory per
+ensemble member:
 
 ```bash
-jobrun ./runme -s -- -o OUTDIR
+runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10
 ```
 
-The difference here is that all options that follow the `--` are `jobrun` options. So now we don't specify the specific `RUNDIR`, but rather an encapsulating `OUTDIR` that will contain one or many `RUNDIR`'s. In the above example, no parameters are changed, so the simulation is saved in the `default` directory: `OUTDIR/default`.
-
-If we want to change a parameter, this can be done as with the `runme` script via the `-p` option:
+This runs three simulations in `OUTDIR/0`, `OUTDIR/1`, `OUTDIR/2`. Single-valued
+`-p` entries given alongside ensemble dimensions are *fixed overrides* applied to
+every member:
 
 ```bash
-jobrun ./runme -s -- -o OUTDIR -p ctl.n_accel=10
+runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10 ctl.year=5000 smb.alb_ice=0.3,0.4
 ```
 
-This will produce one simulation with the parameter `control.n_accel=10`. Since we have changed a parameter for this simulation, `jobrun` treats this as an ensemble, so the output is saved in `OUTDIR/0` for simulation 0. In short, the above command is equivalent to `./runme -s -o OUTDIR -p ctl.n_accel=10`, but in the former case, the output is stored in `OUTDIR/0` and in the latter case, it is stored directly in `OUTDIR`.
-
-The power of `jobrun` comes when we want to run an ensemble:
+Use `-a` for run directories named from the parameter values instead of the run id:
 
 ```bash
-jobrun ./runme -s -- -o OUTDIR -p ctl.n_accel=1,5,10
+runme -r -a -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10
 ```
 
-This ensemble of simulations will appear in `OUTDIR/0`, `OUTDIR/1` and `OUTDIR/2`, respectively.
+### Ensemble output files
 
-A more informative output directory can be made using the option `-a` along with `-o`:
+In `OUTDIR`:
+
+- `params.txt` / `info.txt` — the full parameter table (ensemble dimensions *and*
+  fixed overrides); `info.txt` adds the `runid` and `rundir` columns.
+- `params_ensemble.txt` / `info_ensemble.txt` — only the permuted ensemble
+  dimensions.
+
+```
+  runid  ctl.n_accel  rundir
+      0            1   0
+      1            5   1
+      2           10   2
+```
+
+Each member run directory additionally gets its own single-row `params.txt` /
+`info.txt` and a `runme.json` record, so any run directory — single or ensemble
+member — loads the same way.
+
+### Selecting a subset of members
+
+Run only some members with `-j` (slurm `--array` syntax):
 
 ```bash
-jobrun ./runme -s -- -a -o OUTDIR -p ctl.n_accel=1,5,10
+runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10 -j 0,2     # members 0 and 2
+runme -r -o OUTDIR -n par/model.nml -i lhs.txt -j 0-9               # first ten members
 ```
 
-In this case, the run directories are `OUTDIR/ctl.nccl.1`, `OUTDIR/ctl.nccl.5` and `OUTDIR/ctl.nccl.10`, respectively.
+### Generating ensembles
 
-General information about the ensemble can be found in the main ensemble directory `OUTDIR`:
+For complex ensembles, a two-step approach is often clearer: generate the
+parameter set first (so you can check it and keep it for reproducibility), then
+run it with `-i`.
 
-- `params.txt` : contains a table of the parameter combinations set on the command line (can be used to run a new ensemble).
-- `info.txt` : the same parameter table as `params.txt`, but also including an index of the `runid` (0,1,2, etc) and the `RUNDIR`:
-
-`info.txt`:
-
-```python
-  runid    ctl.n_accel  rundir
-      0              1  ctl.nccl.1
-      1              5  ctl.nccl.5
-      2             10  ctl.nccl.10
-```
-
-It is of course possible to define multiple parameter permutations:
+Factorial combination:
 
 ```bash
-jobrun ./runme -s -- -o OUTDIR -p ctl.n_accel=1,5,10 smb.alb_ice=0.3,0.4
+runme product ctl.n_accel=1,5,10 smb.alb_ice=0.3,0.4 -o grid.txt
+runme -r -o OUTDIR -n par/model.nml -i grid.txt
 ```
 
-To generate a more complex ensemble, using e.g. Latin-Hypercube sampling, then a two step approach is often better. First, use the `runner` command `job sample` to build the ensemble, then use `jobrun` to run it:
+Latin-hypercube (or Monte-Carlo) sampling of distributions:
 
 ```bash
-# Generate ensemble parameters
-job sample -o lhs.txt --seed 4 -N 100 atm.c_trop_2=0.8,1.2 smb.alb_ice=0.3,0.4
-
-# Run ensemble
-jobrun ./runme -s -- -o OUTDIR -i lhs.txt
+runme sample atm.c_trop=U?0.8,1.2 smb.alb_ice=N?0.35,0.05 -N 100 --seed 4 -o lhs.txt
+runme -r -o OUTDIR -n par/model.nml -i lhs.txt
 ```
 
-This two-step method facilitates checking that the ensemble was generated properly and improves reproducibility, since the exact parameter values are available in the table.
+Distribution specs: `U?MIN,MAX` (uniform), `N?MEAN,SD` (normal), or any
+`scipy.stats` distribution as `TYPE?[SHP,]LOC,SCALE`. Discrete values (`a=1,2,3`)
+and ranges (`a=0:10:5`) are also accepted.
 
+### Dry run
+
+Add `--dry-run` to print what would be staged and run for each member without
+creating or running anything.
+
+## Acknowledgments
+
+`runme` builds on the [`runner`](https://github.com/perrette/runner) package by
+Mahé Perrette, a flexible framework for sampling parameters and for running and
+analyzing model ensembles. `runme` reimplements a focused subset of that
+functionality — factorial combination, Latin-hypercube and Monte-Carlo sampling,
+and ensemble execution — while stripping away the more complex methods (Bayesian
+analysis, iterative importance sampling, weighted resampling). Here the ensemble
+"run" step is handled simply by calling `runme` itself, rather than by wrapping a
+separate per-simulation script.
+
+If you need those more advanced methods, use the original
+[`perrette/runner`](https://github.com/perrette/runner) package directly.
