@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runme"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Stage, run, and submit single simulations and ensembles for model projects."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -20,6 +20,9 @@ dependencies = [
 
 [project.scripts]
 runme = "runme.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "runme.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
