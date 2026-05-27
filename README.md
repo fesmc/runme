@@ -31,8 +31,8 @@ pip install git+https://github.com/fesmc/runme
 ```
 
 This puts the `runme` command on your path. To upgrade later, add `--upgrade` (or
-`--force-reinstall`) to the same command. The only dependencies are `numpy`,
-`scipy`, and `tabulate`, all installed automatically.
+`--force-reinstall`) to the same command. The only dependencies are `numpy` and
+`scipy` (used by the ensemble sampling), installed automatically.
 
 Once installed, `runme --init` scaffolds a project (see below), `runme --config`
 manages your local settings, and `runme --list` shows the available HPC queues.
