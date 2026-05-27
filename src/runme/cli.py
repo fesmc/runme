@@ -220,6 +220,12 @@ def _main(argv):
     if argv and argv[0] == "product":
         return _sample.main_product(argv[1:])
 
+    # `runme check queues [NAME]` introspects the cluster's SLURM queues and
+    # emits a queues.json block; it needs no project config or -o.
+    if argv and argv[0] == "check":
+        from runme import discover as _discover
+        return _discover.main_check(argv[1:])
+
     # --version works from anywhere, without a project configuration.
     if "-V" in argv or "--version" in argv:
         print("runme " + __version__)

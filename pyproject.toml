@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runme"
-version = "0.1.0"
+version = "0.2.0"
 description = "Stage, run, and submit single simulations and ensembles for model projects."
 readme = "README.md"
 requires-python = ">=3.8"

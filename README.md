@@ -106,7 +106,12 @@ override the packaged defaults.
 - Inspect available queues with `runme --list` (or `runme --list HPC`).
 - Inspect the active config with `runme --config`.
 - If you use a new HPC not in the packaged `queues.json`, add it (and please open
-  an issue/PR so the package stays up to date).
+  an issue/PR so the package stays up to date). On the new cluster's login node,
+  `runme check queues [NAME]` introspects SLURM (via `scontrol`/`sacctmgr`),
+  prints a ready-made block of the `(partition, qos, wall)` triplets you can
+  actually submit to, and offers to merge it into your queues file. Aliases are
+  guessed from whichever of partition/qos varies, falling back to
+  `queue1, queue2, ...` (rename them afterwards) when both vary.
 
 ## Running a single simulation
 
