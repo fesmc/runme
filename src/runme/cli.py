@@ -68,7 +68,8 @@ def build_parser(hpc_config, info):
     parser = argparse.ArgumentParser(
         prog="runme",
         description="Stage, run, and submit single simulations and ensembles.",
-        epilog="Subcommands: 'runme sample' and 'runme product' generate ensemble parameter files.")
+        epilog="Subcommands: 'runme sample'/'runme product' generate ensemble parameter files; "
+               "'runme check queues' discovers SLURM queues; 'runme update' upgrades runme itself.")
 
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
     parser.add_argument('-e', '--exe', type=str, default=info['exe_default'],
@@ -198,6 +199,17 @@ def build_context(args, hpc_config, hpc_queues, info):
     )
 
 
+RUNME_GIT_URL = "git+https://github.com/fesmc/runme.git"
+
+
+def _update():
+    """Upgrade the installed runme package from GitHub via pip."""
+    import subprocess
+    cmd = [sys.executable, "-m", "pip", "install", "-U", RUNME_GIT_URL]
+    print("Updating runme: {}".format(" ".join(cmd)))
+    return subprocess.call(cmd)
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -225,6 +237,11 @@ def _main(argv):
     if argv and argv[0] == "check":
         from runme import discover as _discover
         return _discover.main_check(argv[1:])
+
+    # `runme update` upgrades the installed package from GitHub; it needs no
+    # project config or -o.
+    if argv and argv[0] == "update":
+        return _update()
 
     # --version works from anywhere, without a project configuration.
     if "-V" in argv or "--version" in argv:
