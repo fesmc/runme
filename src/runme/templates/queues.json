@@ -141,6 +141,42 @@
                 "wall" : "12:00:00" 
             }
         }
+    },
+
+    "leftraru": {
+        "job_template": ".runme/submit_slurm",
+        "queues": {
+            "main": {
+                "qos": "iniciacion",
+                "partition": "main",
+                "wall": "720:00:00"
+            },
+            "general": {
+                "qos": "iniciacion",
+                "partition": "general",
+                "wall": "720:00:00"
+            },
+            "largemem": {
+                "qos": "iniciacion",
+                "partition": "largemem",
+                "wall": "720:00:00"
+            },
+            "debug": {
+                "qos": "iniciacion",
+                "partition": "debug",
+                "wall": "00:30:00"
+            },
+            "v100": {
+                "qos": "iniciacion",
+                "partition": "v100",
+                "wall": "720:00:00"
+            },
+            "mi210": {
+                "qos": "iniciacion",
+                "partition": "mi210",
+                "wall": "720:00:00"
+            }
+        }
     }
 }
 
