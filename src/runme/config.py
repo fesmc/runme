@@ -66,9 +66,13 @@ def resolve_file(path):
 def load(config_file=RUNME_CONFIG):
     """Load the runme configuration.
 
-    Returns ``(hpc_config, hpc_queues, info)`` where ``hpc_config`` is the local
-    config dict, ``hpc_queues`` is the queue block for the configured HPC, and
+    Returns ``(hpc_config, queues_all, info)`` where ``hpc_config`` is the local
+    config dict, ``queues_all`` is the full queues file (all HPC blocks), and
     ``info`` is the model info dict (executables, parameter files, links, ...).
+
+    The per-HPC queue block is *not* selected here: that is a submit-time concern
+    (see :func:`select_hpc_queues`), so a local run never depends on the
+    configured ``hpc`` being present in the queues file.
     """
     if not os.path.isfile(config_file):
         error_msg = (
@@ -81,16 +85,32 @@ def load(config_file=RUNME_CONFIG):
 
     hpc_config = json.load(open(config_file))
 
-    # Load all queue information and extract the relevant one for the current hpc.
-    # The queues file may come from the project, ~/.config/runme, or the package.
+    # Load all queue information. The relevant per-HPC block is selected only
+    # when submitting (see select_hpc_queues). The queues file may come from the
+    # project, ~/.config/runme, or the package.
     queues_all = json.load(open(resolve_file(hpc_config["queues_file"])))
-    hpc_queues = queues_all[hpc_config["hpc"]]
 
     # Load configuration info for the current setup (paths, links, aliases, etc).
     # info is project-specific, so this normally resolves to the project file.
     info = json.load(open(resolve_file(hpc_config["info_file"])))
 
-    return hpc_config, hpc_queues, info
+    return hpc_config, queues_all, info
+
+
+def select_hpc_queues(queues_all, hpc):
+    """Select the queue block for ``hpc`` from the full queues file.
+
+    Raises a clear error listing the available HPCs when ``hpc`` is absent, so a
+    misconfigured ``hpc`` surfaces a helpful message instead of a bare KeyError.
+    Only needed at submit time.
+    """
+    if hpc not in queues_all:
+        raise Exception(
+            "HPC '{}' not found in the queues file. Available HPCs: {}\n".format(
+                hpc, ", ".join(queues_all.keys()) or "(none)") +
+            "Set 'hpc' in {} to one of these, or add a block for it "
+            "(see `runme --list` and `runme check queues`).".format(RUNME_CONFIG))
+    return queues_all[hpc]
 
 
 def handle_info_options(config_file=RUNME_CONFIG,

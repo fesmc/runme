@@ -134,7 +134,7 @@ def build_parser(hpc_config, info):
     return parser
 
 
-def build_context(args, hpc_config, hpc_queues, info):
+def build_context(args, hpc_config, queues_all, info):
     """Resolve the member-independent run context shared by all runs.
 
     Expands the executable alias, builds the executable command line, resolves
@@ -175,11 +175,15 @@ def build_context(args, hpc_config, hpc_queues, info):
         print("Input file does not exist: {}".format(par_path))
         sys.exit()
 
-    # Queue settings (only needed when submitting).
+    # Queue settings and the submit template are only needed when submitting; a
+    # local run never selects an HPC block, so an unknown `hpc` is harmless.
     qos = partition = wall = mem = None
+    template = None
     if args.submit:
+        hpc_queues = _config.select_hpc_queues(queues_all, hpc_config["hpc"])
         qos, partition, wall, mem = _hpc.resolve_queue(
             hpc_queues, hpc_config, args.queue, args.qos, args.part, args.wall, args.mem)
+        template = _config.resolve_file(hpc_queues["job_template"])
 
     return argparse.Namespace(
         info=info,
@@ -194,7 +198,7 @@ def build_context(args, hpc_config, hpc_queues, info):
         account=args.account, omp=args.omp,
         jobname=hpc_config["jobname"], email=args.email,
         mail_type=hpc_config["mail_type"],
-        template=_config.resolve_file(hpc_queues["job_template"]),
+        template=template,
         command=" ".join(sys.argv),
     )
 
@@ -257,12 +261,12 @@ def _main(argv):
     # still display the generic options outside a project directory.
     want_help = "-h" in argv or "--help" in argv
     try:
-        hpc_config, hpc_queues, info = _config.load()
+        hpc_config, queues_all, info = _config.load()
     except Exception:
         if not want_help:
             raise
         hpc_config = {"omp": 1, "email": "", "account": "", "jobname": "", "mail_type": []}
-        hpc_queues = {"job_template": ""}
+        queues_all = {}
         info = {"exe_default": None, "exe_aliases": {},
                 "par_path_as_argument": False, "grp_aliases": {}}
 
@@ -270,7 +274,7 @@ def _main(argv):
     args = parser.parse_args(argv)
 
     ensemble_specs, fixed = classify_params(args.p)
-    ctx = build_context(args, hpc_config, hpc_queues, info)
+    ctx = build_context(args, hpc_config, queues_all, info)
 
     is_ensemble = bool(args.params_file) or bool(ensemble_specs)
 
