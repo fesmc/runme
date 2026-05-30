@@ -71,6 +71,9 @@ def config_init(argv):
         print("  [ok] {} (already present; not overwritten)".format(_config.CONFIG_PATH))
 
     print("")
+    print("Note: queues.json is provided by the packaged default; run")
+    print("`runme config queues` if you need a local copy to customise.")
+    print("")
     print("Next steps:")
     print("  1. Edit {} (set 'hpc' and 'account' at minimum).".format(_config.CONFIG_PATH))
     print("     See `runme queues --all` for clusters and `runme accounts`")
@@ -85,15 +88,48 @@ def config_init(argv):
 # `runme config queues` / `runme config info` -- install + show a JSON file
 # ---------------------------------------------------------------------------
 def config_queues(argv):
-    """Install / refresh / show ``.runme/queues.json``."""
+    """Show the active queues file; offer to install a local copy if missing.
+
+    Order:
+
+    1. Resolve and print whatever queues file runme is currently reading
+       (project, ~/.config/runme/, or the packaged default).
+    2. Only if ``.runme/queues.json`` does *not* exist locally, offer to
+       copy the packaged template in so the user can customise it.
+
+    The packaged default is good enough for most projects -- copying it in
+    is opt-in to avoid useless duplication.
+    """
     if argv:
         _usage("runme config queues")
         return 1
-    return _install_and_show(
-        target=_config.QUEUES_PATH,
-        template_basename="queues.json",
-        label="queues file",
-    )
+
+    resolved = _config.resolve_file(_config.QUEUES_PATH)
+    if not os.path.isfile(resolved):
+        print("Queues file not found anywhere (not in project, "
+              "~/.config/runme/, or the packaged templates).")
+        return 1
+
+    print("Current queues file ({}):".format(resolved))
+    print("")
+    _print_doc_then_file(resolved)
+
+    if not os.path.isfile(_config.QUEUES_PATH):
+        print("")
+        print("Queues file '{}' not found.".format(_config.QUEUES_PATH))
+        print("To add/modify queue information, a local version is needed.")
+        if _config.confirm("Copy packaged template to '{}'? (Y/n) "
+                           .format(_config.QUEUES_PATH)):
+            parent = os.path.dirname(_config.QUEUES_PATH)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            packaged = os.path.join(_config.PACKAGE_TEMPLATES, "queues.json")
+            shutil.copy(packaged, _config.QUEUES_PATH)
+            print("Copied packaged template to '{}'.".format(_config.QUEUES_PATH))
+        else:
+            print("Not copied. Re-run `runme config queues` to install a local "
+                  "copy later.")
+    return 0
 
 
 def config_info(argv):
@@ -109,10 +145,10 @@ def config_info(argv):
 
 
 def _install_and_show(target, template_basename, label):
-    """Shared workhorse: copy template to target (prompt if exists), then print.
+    """Install (or refresh) a project-local file with no fallback, then print.
 
-    Header lines from the ``_doc`` array are printed as a banner above the
-    file contents, so the instructions are visible without polluting the JSON.
+    Used for ``info.json``: there is no sensible fallback chain, so a missing
+    file is copied in immediately; an existing file prompts for overwrite.
     """
     packaged = os.path.join(_config.PACKAGE_TEMPLATES, template_basename)
 
@@ -135,9 +171,19 @@ def _install_and_show(target, template_basename, label):
     print("Current {} ({}):".format(label, target))
     print("(edit this file directly to change settings)")
     print("")
+    _print_doc_then_file(target)
+    return 0
 
-    # Print the _doc banner first (if any), then the file as-is.
-    with open(target) as f:
+
+def _print_doc_then_file(path):
+    """Print the ``_doc`` array (as ``#``-prefixed lines) then the raw file.
+
+    JSON has no comment syntax, so files like ``queues.json`` carry their
+    header instructions under a top-level ``_doc`` array. Showing those as a
+    banner above the file makes the rules visible without leaking into the
+    machine-read data.
+    """
+    with open(path) as f:
         raw = f.read()
     try:
         data = json.loads(raw)
@@ -147,11 +193,9 @@ def _install_and_show(target, template_basename, label):
         for line in data["_doc"]:
             print("# " + line if line else "#")
         print("")
-
     sys.stdout.write(raw)
     if not raw.endswith("\n"):
         sys.stdout.write("\n")
-    return 0
 
 
 # ---------------------------------------------------------------------------

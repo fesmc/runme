@@ -37,8 +37,10 @@ INFO_PATH = os.path.join(RUNME_DIR, "info.json")
 USER_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "runme")
 PACKAGE_TEMPLATES = os.path.join(os.path.dirname(__file__), "templates")
 
-# Files copied/scaffolded by ``runme config init``.
-INIT_TEMPLATES = ("config.default.toml", "info.json", "queues.json")
+# Files copied/scaffolded by ``runme config init``. queues.json is intentionally
+# NOT copied: it resolves through the fallback chain and only needs a local
+# copy when the user wants to customise it (see ``runme config queues``).
+INIT_TEMPLATES = ("config.default.toml", "info.json")
 
 # Validation key sets.
 REQUIRED_CONFIG_KEYS = ["hpc", "account", "jobname", "omp", "mem",
