@@ -1,0 +1,29 @@
+# runme project config (template).
+#
+# This is the tracked default for this project. Copy it to .runme/config.toml
+# (gitignored) and edit your local copy — runme reads config.toml and never
+# this file.
+#
+# Bootstrap with `runme config init`. Inspect with `runme info`.
+
+
+# HPC system. Must match a top-level key in queues.json.
+hpc = "CHANGEME"
+
+# SLURM account. See `runme accounts` for available accounts.
+account = "CHANGEME"
+
+# Job name (#SBATCH --job-name).
+jobname = "ClimberX"
+
+# OpenMP threads (0 disables OpenMP).
+omp = 16
+
+# Default memory per node in MB. -1 leaves #SBATCH --mem unset.
+mem = -1
+
+# Email for SLURM notifications. Blank disables them.
+email = ""
+
+# Notification types: FAIL, REQUEUE, BEGIN, END, ALL.
+mail_type = ["FAIL", "REQUEUE"]

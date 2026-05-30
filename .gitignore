@@ -1,4 +1,5 @@
-.runme_config
+# Active config: per-user, copied from .runme/config.default.toml.
+.runme/config.toml
 
 # Claude Code worktrees and local artifacts
 .claude/

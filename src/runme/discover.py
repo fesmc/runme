@@ -246,36 +246,29 @@ def build_block(triplets, aliases, job_template=".runme/submit_slurm"):
     return {"job_template": job_template, "queues": queues}
 
 
-def _target_queues_path():
-    """Project path to write queues into (config's queues_file, else default)."""
-    if os.path.isfile(_config.RUNME_CONFIG):
-        try:
-            conf = json.load(open(_config.RUNME_CONFIG))
-            return conf.get("queues_file", _config.DEFAULT_QUEUES)
-        except Exception:
-            pass
-    return _config.DEFAULT_QUEUES
-
-
 def merge_block(name, block):
-    """Merge ``block`` under key ``name`` into the project queues file.
+    """Merge ``block`` under key ``name`` into ``.runme/queues.json``.
 
-    Existing clusters are preserved; an existing entry for ``name`` is only
-    overwritten after confirmation. Returns the path written.
+    Existing clusters are preserved (including the ``_doc`` header); an
+    existing entry for ``name`` is only overwritten after confirmation.
+    Returns the path written.
     """
-    target = _target_queues_path()
+    target = _config.QUEUES_PATH
 
-    # Seed from any resolvable existing file so other clusters are kept.
+    # Seed from any resolvable existing file so other clusters and the _doc
+    # header are kept. We deliberately read the *raw* JSON here (not via
+    # load_json_strip_doc) so the header is preserved on write.
     resolved = _config.resolve_file(target)
     base = {}
     if os.path.isfile(resolved):
         try:
-            base = json.load(open(resolved))
+            with open(resolved) as f:
+                base = json.load(f)
         except Exception as error:
             raise Exception("existing queues file '{}' is not valid JSON: {}"
                             .format(resolved, error))
 
-    if name in base and not _config._confirm(
+    if name in base and not _config.confirm(
             "Cluster '{}' already exists in {}. Overwrite it? (Y/n) ".format(name, target)):
         print("Keeping existing '{}' entry; nothing written.".format(name))
         return None
@@ -348,16 +341,16 @@ def main_check(argv):
 
     if accounts:
         print("Discovered account(s) for 'account' in {}: {}".format(
-            _config.RUNME_CONFIG, ", ".join(accounts)))
+            _config.CONFIG_PATH, ", ".join(accounts)))
     print()
 
-    target = _target_queues_path()
-    if _config._confirm("Merge this block into {}? (Y/n) ".format(target)):
+    target = _config.QUEUES_PATH
+    if _config.confirm("Merge this block into {}? (Y/n) ".format(target)):
         written = merge_block(name, block)
         if written:
             print("Wrote '{}' to {}.".format(name, written))
-            print("Set \"hpc\": \"{}\" in {} (and check the aliases) to use it."
-                  .format(name, _config.RUNME_CONFIG))
+            print("Set hpc = \"{}\" in {} (and check the aliases) to use it."
+                  .format(name, _config.CONFIG_PATH))
     else:
         print("Not written. Copy the block above into your queues file manually "
               "if you want it.")

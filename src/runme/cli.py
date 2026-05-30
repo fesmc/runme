@@ -2,15 +2,14 @@
 
 Dispatch:
 
-* ``runme sample ...`` / ``runme product ...`` -> generate an ensemble
-  parameter file (see :mod:`runme.sample`).
-* ``runme ... -i FILE`` or any ensemble-shaped ``-p`` spec -> ensemble mode
-  (see :mod:`runme.ensemble`).
-* otherwise -> single simulation.
+* ``runme <subcommand> ...`` -> see :mod:`runme.commands` (config, info,
+  queues, accounts, version, completions, sample, product, check, update).
+* ``runme ...`` (no subcommand) -> single simulation or ensemble run.
 
-A ``-p`` value is "ensemble-shaped" when it contains a comma (list), a colon
-(range), or ``?`` (distribution). Single-valued ``-p`` entries are fixed
-overrides applied to every run.
+The run path takes ``-o RUNDIR`` and ``-p KEY=VAL`` overrides. A ``-p`` value
+is "ensemble-shaped" when it contains a comma (list), a colon (range), or
+``?`` (distribution); single-valued ``-p`` entries are fixed overrides applied
+to every run, and any ensemble-shaped entry triggers ensemble mode.
 """
 import os
 import sys
@@ -19,19 +18,23 @@ from collections import OrderedDict as odict
 
 from runme import __version__
 from runme import config as _config
+from runme import commands as _commands
 from runme import hpc as _hpc
 from runme import stage as _stage
 from runme import run as _run
 from runme import sample as _sample
 
 
+# ---------------------------------------------------------------------------
+# Parameter spec parsing (shared by single-sim and ensemble)
+# ---------------------------------------------------------------------------
 def _is_ensemble_spec(spec):
     """True if the value spec denotes an ensemble dimension (list/range/dist)."""
     return (',' in spec) or ('?' in spec) or (':' in spec)
 
 
 def _coerce(valstr):
-    """Coerce a single value string to int, float, or str (as the old -p did)."""
+    """Coerce a single value string to int, float, or str (matching the old -p)."""
     try:
         value = float(valstr)
         if value % 1 == 0 and '.' not in valstr:
@@ -45,7 +48,7 @@ def classify_params(raw):
     """Split raw ``key=spec`` entries into ensemble specs and fixed overrides.
 
     Returns ``(ensemble_specs, fixed)`` where ``ensemble_specs`` is the list of
-    raw ``key=spec`` strings that denote ensemble dimensions and ``fixed`` is an
+    raw ``key=spec`` strings denoting ensemble dimensions and ``fixed`` is an
     ordered dict of single-valued overrides.
     """
     ensemble_specs = []
@@ -59,6 +62,9 @@ def classify_params(raw):
     return ensemble_specs, fixed
 
 
+# ---------------------------------------------------------------------------
+# Run parser (the default `runme ...` invocation)
+# ---------------------------------------------------------------------------
 def build_parser(hpc_config, info):
     """Build the run argument parser (single-sim and ensemble share it)."""
     exe_aliases_str = "; ".join(
@@ -68,16 +74,20 @@ def build_parser(hpc_config, info):
     parser = argparse.ArgumentParser(
         prog="runme",
         description="Stage, run, and submit single simulations and ensembles.",
-        epilog="Subcommands: 'runme sample'/'runme product' generate ensemble parameter files; "
-               "'runme check queues' discovers SLURM queues; 'runme update' upgrades runme itself.")
+        epilog=("Subcommands: `runme config`, `runme info`, `runme queues`, "
+                "`runme accounts`, `runme check queues`, `runme sample`, "
+                "`runme product`, `runme update`, `runme version`, "
+                "`runme completions`. Run `runme <subcommand> --help` for details."))
 
-    parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
+    parser.add_argument('-V', '--version', action='version',
+                        version="%(prog)s " + __version__)
     parser.add_argument('-e', '--exe', type=str, default=info['exe_default'],
                         help="Executable file to use. Shortcuts: " + exe_aliases_str)
     parser.add_argument('-r', '--run', action="store_true",
                         help='Run the executable after preparing the job?')
     parser.add_argument('-s', '--submit', action="store_true",
-                        help='Prepare a submit script (and submit it, with -r) instead of running directly?')
+                        help='Prepare a submit script (and submit it, with -r) '
+                             'instead of running directly?')
     parser.add_argument('-q', '--queue', type=str, default=None,
                         help='Alias of the queue the job should be submitted to.')
     parser.add_argument('-w', '--wall', type=str, default=None,
@@ -95,16 +105,10 @@ def build_parser(hpc_config, info):
     parser.add_argument('--account', type=str, default=hpc_config["account"],
                         help='HPC account (overrides config).')
     parser.add_argument('-v', action="store_true", help='Verbose script output?')
-    parser.add_argument('--debug', action="store_true", help='Print a full traceback on error.')
-    parser.add_argument('--init', action="store_true",
-                        help='Create or validate the .runme/ configuration directory, then exit.')
-    parser.add_argument('--list', nargs='?', const='__ALL__', default=None, metavar='HPC',
-                        help='List queue aliases for the given HPC (or all), then exit.')
-    parser.add_argument('--config', action="store_true",
-                        help='Show the current {} (copying the default from {} if missing), then exit.'.format(
-                            _config.RUNME_CONFIG, _config.DEFAULT_CONFIG))
+    parser.add_argument('--debug', action="store_true",
+                        help='Print a full traceback on error.')
 
-    # Ensemble options
+    # Ensemble options.
     grp = parser.add_argument_group('ensemble options')
     grp.add_argument('-i', '--params-file', dest='params_file', default=None,
                      help='Run an ensemble from a parameter file (e.g. from `runme sample`).')
@@ -138,8 +142,9 @@ def build_context(args, hpc_config, queues_all, info):
     """Resolve the member-independent run context shared by all runs.
 
     Expands the executable alias, builds the executable command line, resolves
-    queue settings (when submitting), and validates input files. Returns an
-    ``argparse.Namespace``.
+    queue settings (when submitting), and validates input files. When the user
+    is submitting, prints a one-block summary of the resolved cluster settings
+    so any misconfiguration surfaces before sbatch sees it.
     """
     copy_exec = True       # run the executable from inside the run directory
     with_profiler = False  # vtune profiler prefix (disabled)
@@ -153,8 +158,6 @@ def build_context(args, hpc_config, queues_all, info):
     exe_fname = os.path.basename(exe_path)
     par_path = getattr(args, 'par_path', None)
 
-    # Executable argument (parameter file) when required. With copy_exec the run
-    # directory holds a copy, so the argument is the same for every member.
     if info["par_path_as_argument"] is True:
         exe_args = os.path.basename(par_path)
     else:
@@ -167,16 +170,8 @@ def build_context(args, hpc_config, queues_all, info):
     exe_rundir = "." if copy_exec else os.getcwd()
     executable = "{}{}/{} {}".format(profiler_prefix, exe_rundir, exe_fname, exe_args)
 
-    # Validate inputs.
-    if not os.path.isfile(exe_path):
-        print("Input file does not exist: {}".format(exe_path))
-        sys.exit()
-    if info["par_path_as_argument"] is True and not os.path.isfile(par_path):
-        print("Input file does not exist: {}".format(par_path))
-        sys.exit()
-
-    # Queue settings and the submit template are only needed when submitting; a
-    # local run never selects an HPC block, so an unknown `hpc` is harmless.
+    # Resolve queue settings and print the submit summary first, so a missing
+    # exe or par file doesn't hide what runme intended to do.
     qos = partition = wall = mem = None
     template = None
     if args.submit:
@@ -184,6 +179,26 @@ def build_context(args, hpc_config, queues_all, info):
         qos, partition, wall, mem = _hpc.resolve_queue(
             hpc_queues, hpc_config, args.queue, args.qos, args.part, args.wall, args.mem)
         template = _config.resolve_file(hpc_queues["job_template"])
+
+        print("")
+        print("Resolved submit settings:")
+        print("  hpc       = {}".format(hpc_config["hpc"]))
+        print("  account   = {}".format(args.account))
+        print("  queue     = {}".format(args.queue if args.queue else "(individual overrides)"))
+        print("  partition = {}".format(partition))
+        print("  qos       = {}".format(qos))
+        print("  wall      = {}".format(wall))
+        print("  mem       = {}".format(mem if mem not in (None, -1) else "(unset)"))
+        print("  omp       = {}".format(args.omp))
+        print("  template  = {}".format(template))
+        print("")
+
+    if not os.path.isfile(exe_path):
+        print("Input file does not exist: {}".format(exe_path))
+        sys.exit()
+    if info["par_path_as_argument"] is True and not os.path.isfile(par_path):
+        print("Input file does not exist: {}".format(par_path))
+        sys.exit()
 
     return argparse.Namespace(
         info=info,
@@ -203,6 +218,9 @@ def build_context(args, hpc_config, queues_all, info):
     )
 
 
+# ---------------------------------------------------------------------------
+# `runme update` -- self-upgrade from GitHub
+# ---------------------------------------------------------------------------
 RUNME_GIT_URL = "git+https://github.com/fesmc/runme.git"
 
 
@@ -214,6 +232,9 @@ def _update():
     return subprocess.call(cmd)
 
 
+# ---------------------------------------------------------------------------
+# Entry point and dispatch
+# ---------------------------------------------------------------------------
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -229,43 +250,83 @@ def main(argv=None):
         sys.exit(1)
 
 
+# Subcommands that need no project config and are dispatched before loading it.
+# Each handler takes the remaining argv (after the subcommand name) and returns
+# an exit code (0 = success).
+_SUBCOMMANDS = {
+    "sample":      lambda rest: _sample.main_sample(rest) or 0,
+    "product":     lambda rest: _sample.main_product(rest) or 0,
+    "update":      lambda rest: _update(),
+    "version":     _commands.version,
+    "config":      None,  # dispatched below (has nested subcommands)
+    "info":        _commands.info,
+    "queues":      _commands.queues,
+    "accounts":    _commands.accounts,
+    "completions": _commands.completions,
+    "check":       None,  # dispatched below (has nested subcommands)
+}
+
+_CONFIG_SUBCOMMANDS = {
+    "init":   _commands.config_init,
+    "queues": _commands.config_queues,
+    "info":   _commands.config_info,
+    "check":  _commands.config_check,
+}
+
+
+def _dispatch_config(rest):
+    if not rest:
+        sys.stderr.write(
+            "usage: runme config <init|queues|info|check>\n"
+            "  init    scaffold .runme/ and seed config.toml from the tracked default\n"
+            "  queues  install/refresh .runme/queues.json from the packaged template\n"
+            "  info    install/refresh .runme/info.json from the packaged template\n"
+            "  check   validate every config file without modifying anything\n"
+        )
+        return 1
+    sub = rest[0]
+    if sub not in _CONFIG_SUBCOMMANDS:
+        sys.stderr.write("runme config: unknown subcommand '{}'\n".format(sub))
+        return 1
+    return _CONFIG_SUBCOMMANDS[sub](rest[1:])
+
+
+def _dispatch_check(rest):
+    # `runme check queues` is the SLURM-discovery command (separate from
+    # `runme config check`, which is pure validation).
+    if not rest or rest[0] != "queues":
+        sys.stderr.write("usage: runme check queues [NAME]\n")
+        return 1
+    from runme import discover as _discover
+    return _discover.main_check(rest) or 0
+
+
 def _main(argv):
-    # Subcommands generate ensemble parameter files; they need no config or -o.
-    if argv and argv[0] == "sample":
-        return _sample.main_sample(argv[1:])
-    if argv and argv[0] == "product":
-        return _sample.main_product(argv[1:])
+    # Top-level subcommand dispatch.
+    if argv and argv[0] in _SUBCOMMANDS:
+        sub, rest = argv[0], argv[1:]
+        if sub == "config":
+            return _dispatch_config(rest)
+        if sub == "check":
+            return _dispatch_check(rest)
+        return _SUBCOMMANDS[sub](rest)
 
-    # `runme check queues [NAME]` introspects the cluster's SLURM queues and
-    # emits a queues.json block; it needs no project config or -o.
-    if argv and argv[0] == "check":
-        from runme import discover as _discover
-        return _discover.main_check(argv[1:])
-
-    # `runme update` upgrades the installed package from GitHub; it needs no
-    # project config or -o.
-    if argv and argv[0] == "update":
-        return _update()
-
-    # --version works from anywhere, without a project configuration.
+    # --version still works outside a project (handy after `pip install`).
     if "-V" in argv or "--version" in argv:
         print("runme " + __version__)
-        return
-
-    # Informational options (--list / --config) short-circuit before config/-o.
-    if _config.handle_info_options():
-        return
+        return 0
 
     # Load config. The full parser's help text and defaults come from it, so it
     # is required for a real run; tolerate its absence only so that --help can
-    # still display the generic options outside a project directory.
+    # still display generic options outside a project directory.
     want_help = "-h" in argv or "--help" in argv
     try:
         hpc_config, queues_all, info = _config.load()
     except Exception:
         if not want_help:
             raise
-        hpc_config = {"omp": 1, "email": "", "account": "", "jobname": "", "mail_type": []}
+        hpc_config = {"omp": 1, "email": "", "account": "", "jobname": "",
+                      "mail_type": []}
         queues_all = {}
         info = {"exe_default": None, "exe_aliases": {},
                 "par_path_as_argument": False, "grp_aliases": {}}
@@ -298,12 +359,11 @@ def _main(argv):
         _ensemble.run(ctx, xparams, fixed, expdir=args.rundir, indices=indices,
                       autodir=args.auto_dir, include_default=args.include_default)
     else:
-        # Single simulation.
         _run.execute_one(args.rundir, fixed, ctx, create=True)
         if not ctx.dry_run:
             _stage.write_run_tables(args.rundir, list(fixed.keys()), list(fixed.values()), runid=0)
 
-    return
+    return 0
 
 
 if __name__ == "__main__":

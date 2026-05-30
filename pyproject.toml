@@ -7,7 +7,7 @@ name = "runme"
 dynamic = ["version"]
 description = "Stage, run, and submit single simulations and ensembles for model projects."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
     { name = "Alexander Robinson" },

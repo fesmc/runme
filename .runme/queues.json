@@ -1,147 +1,74 @@
 {
+    "_doc": [
+        "HPC queue aliases for runme.",
+        "",
+        "Each top-level key (other than _doc) is a cluster name. Set 'hpc' in",
+        ".runme/config.toml to one of these. Inspect the table with",
+        "`runme queues` (current cluster) or `runme queues --all`.",
+        "",
+        "For a new cluster, run `runme check queues` on the login node to",
+        "discover usable (partition, qos, wall) triplets and merge them in.",
+        "",
+        "`job_template` is a path to the SLURM submit-script template; it is",
+        "resolved through the project, then ~/.config/runme/, then the",
+        "packaged default."
+    ],
 
-    "pik_hpc2024" :
-    {
-        "job_template"  : ".runme/submit_slurm",
-        
-        "queues" :
-        {   "priority" :
-            {   "qos"  : "priority",
-                "partition" : "priority",
-                "wall" : "24:00:00" 
-            },
-            "short" :
-            {   "qos"  : "short",
-                "partition" : "standard",
-                "wall" : "24:00:00"  
-            },
-            "medium" :
-            {   "qos"  : "medium",
-                "partition" : "standard",
-                "wall" : "168:00:00" 
-            },
-            "long" :
-            {   "qos"  : "long",
-                "partition" : "standard",
-                "wall" : "720:00:00" 
-            },
-            "standby" :
-            {   "qos"  : "standby",
-                "partition" : "priority",
-                "wall" : "168:00:00" 
-            },
-            "standby_cancel" :
-            {   "qos"  : "standby_cancel",
-                "partition" : "priority",
-                "wall" : "168:00:00" 
-            },
-            "io" :
-            {   "qos"  : "io",
-                "partition" : "io",
-                "wall" : "72:00:00" 
-            },
-            "gpushort" :
-            {   "qos"  : "gpushort",
-                "partition" : "gpu",
-                "wall" : "24:00:00"  
-            },
-            "gpumedium" :
-            {   "qos"  : "gpumedium",
-                "partition" : "gpu",
-                "wall" : "168:00:00" 
-            },
-            "gpulong" :
-            {   "qos"  : "gpulong",
-                "partition" : "gpu",
-                "wall" : "720:00:00" 
-            },
-            "gpupreempt" :
-            {   "qos"  : "gpupreempt",
-                "partition" : "gpu",
-                "wall" : "720:00:00" 
-            }
+    "pik_hpc2024": {
+        "job_template": ".runme/submit_slurm",
+        "queues": {
+            "priority":       { "qos": "priority",       "partition": "priority", "wall": "24:00:00"  },
+            "short":          { "qos": "short",          "partition": "standard", "wall": "24:00:00"  },
+            "medium":         { "qos": "medium",         "partition": "standard", "wall": "168:00:00" },
+            "long":           { "qos": "long",           "partition": "standard", "wall": "720:00:00" },
+            "standby":        { "qos": "standby",        "partition": "priority", "wall": "168:00:00" },
+            "standby_cancel": { "qos": "standby_cancel", "partition": "priority", "wall": "168:00:00" },
+            "io":             { "qos": "io",             "partition": "io",       "wall": "72:00:00"  },
+            "gpushort":       { "qos": "gpushort",       "partition": "gpu",      "wall": "24:00:00"  },
+            "gpumedium":      { "qos": "gpumedium",      "partition": "gpu",      "wall": "168:00:00" },
+            "gpulong":        { "qos": "gpulong",        "partition": "gpu",      "wall": "720:00:00" },
+            "gpupreempt":     { "qos": "gpupreempt",     "partition": "gpu",      "wall": "720:00:00" }
         }
     },
 
-    "caucluster" :
-    {
-        "job_template"  : ".runme/submit_slurm",
-        
-        "queues" :
-        {   "test" :
-            {   "qos"  : "test",
-                "partition" : "base",
-                "wall" : "02:00:00"  
-            },
-            "express" :
-            {   "qos"  : "express",
-                "partition" : "base",
-                "wall" : "12:00:00"  
-            },
-            "long" :
-            {   "qos"  : "long",
-                "partition" : "base",
-                "wall" : "240:00:00"  
-            }
+    "caucluster": {
+        "job_template": ".runme/submit_slurm",
+        "queues": {
+            "test":    { "qos": "test",    "partition": "base", "wall": "02:00:00"  },
+            "express": { "qos": "express", "partition": "base", "wall": "12:00:00"  },
+            "long":    { "qos": "long",    "partition": "base", "wall": "240:00:00" }
         }
     },
 
-
-    "awi_albedo" :
-    {
-        "job_template"  : ".runme/submit_slurm",
-        
-        "queues" :
-        {   "30min" :
-            {   "qos"  : "30min",
-                "partition" : "smp",
-                "wall" : "00:30:00"  
-            },
-            "12h" :
-            {   "qos"  : "12h",
-                "partition" : "smp",
-                "wall" : "12:00:00"  
-            },
-            "48h" :
-            {   "qos"  : "48h",
-                "partition" : "smp",
-                "wall" : "48:00:00"  
-            },
-            "1wk" :
-            {   "qos"  : "1wk",
-                "partition" : "smp",
-                "wall" : "168:00:00" 
-            }
+    "awi_albedo": {
+        "job_template": ".runme/submit_slurm",
+        "queues": {
+            "30min": { "qos": "30min", "partition": "smp", "wall": "00:30:00"  },
+            "12h":   { "qos": "12h",   "partition": "smp", "wall": "12:00:00"  },
+            "48h":   { "qos": "48h",   "partition": "smp", "wall": "48:00:00"  },
+            "1wk":   { "qos": "1wk",   "partition": "smp", "wall": "168:00:00" }
         }
     },
 
-    "dkrz_levante" :
-    {
-        "job_template"  : ".runme/submit_slurm",
-        
-        "queues" :
-        {   "compute" :
-            {   "qos"  : "normal",
-                "partition" : "compute",
-                "wall" : "08:00:00"  
-            },
-            "shared" :
-            {   "qos"  : "normal",
-                "partition" : "shared",
-                "wall" : "168:00:00"  
-            },
-            "interactive" :
-            {   "qos"  : "normal",
-                "partition" : "interactive",
-                "wall" : "12:00:00" 
-            },
-            "gpu" :
-            {   "qos"  : "normal",
-                "partition" : "gpu",
-                "wall" : "12:00:00" 
-            }
+    "dkrz_levante": {
+        "job_template": ".runme/submit_slurm",
+        "queues": {
+            "compute":     { "qos": "normal", "partition": "compute",     "wall": "08:00:00"  },
+            "shared":      { "qos": "normal", "partition": "shared",      "wall": "168:00:00" },
+            "interactive": { "qos": "normal", "partition": "interactive", "wall": "12:00:00"  },
+            "gpu":         { "qos": "normal", "partition": "gpu",         "wall": "12:00:00"  }
+        }
+    },
+
+    "nlhpc_leftraru": {
+        "job_template": ".runme/submit_slurm",
+        "queues": {
+            "main":     { "qos": "iniciacion", "partition": "main",     "wall": "720:00:00" },
+            "general":  { "qos": "iniciacion", "partition": "general",  "wall": "720:00:00" },
+            "largemem": { "qos": "iniciacion", "partition": "largemem", "wall": "720:00:00" },
+            "debug":    { "qos": "iniciacion", "partition": "debug",    "wall": "00:30:00"  },
+            "v100":     { "qos": "iniciacion", "partition": "v100",     "wall": "720:00:00" },
+            "mi210":    { "qos": "iniciacion", "partition": "mi210",    "wall": "720:00:00" }
         }
     }
 }
-
-
