@@ -129,13 +129,16 @@ def select_hpc_queues(queues_all, hpc):
     site-packages copy of queues.json. Only needed at submit time.
     """
     if hpc not in queues_all:
+        available = ", ".join(queues_all.keys()) or "(none)"
         raise Exception(
-            "HPC '{}' not in queues.json. Available: {}\n".format(
-                hpc, ", ".join(queues_all.keys()) or "(none)") +
-            "Either set 'hpc' in {} to one of these, or add a new cluster:\n".format(CONFIG_PATH) +
-            "  * `runme check queues` on the cluster login node (autodiscover), or\n"
-            "  * `runme config queues` to install a local .runme/queues.json to edit.\n"
-            "Run `runme queues --all` to see the full table.")
+            "Active hpc '{}' not found in queues.json.\n".format(hpc) +
+            "Available clusters: {}\n".format(available) +
+            "To use an hpc for submitting jobs, either:\n"
+            "  * update 'hpc' in {} to match an available cluster listed above, or\n".format(CONFIG_PATH) +
+            "  * run `runme config queues` to install a local copy of\n"
+            "    queues.json under .runme/ that you can edit by hand, and add '{}'.\n".format(hpc) +
+            "      - Note, you can run `runme check queues` on the cluster login node to\n"
+            "        autodiscover its (partition, qos, wall) triplets.")
     return queues_all[hpc]
 
 

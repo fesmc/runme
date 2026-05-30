@@ -456,12 +456,16 @@ def _print_hpc_not_found(current_hpc, queues_path, queues_all):
 
     Branches:
     * placeholder ``CHANGEME`` -> first-time-setup hint pointing at config.toml.
-    * unknown name -> list available clusters and explain how to add a new one
-      (config queues for a local copy, check queues for autodiscovery), so the
-      user doesn't try to edit the packaged file in site-packages.
+    * unknown name -> list available clusters and walk the user through the
+      two ways to proceed, so nobody tries to edit the packaged file.
+
+    When the resolved path is the packaged template, the path annotation
+    ``(default queues list - do not edit)`` is appended inline.
     """
     available = ", ".join(queues_all.keys()) or "(none)"
-    is_packaged = queues_path.startswith(_config.PACKAGE_TEMPLATES)
+    annotation = ""
+    if queues_path.startswith(_config.PACKAGE_TEMPLATES):
+        annotation = " (default queues list - do not edit)"
 
     if current_hpc in ("CHANGEME", "", None):
         print("Active hpc is still the placeholder '{}'.".format(current_hpc))
@@ -472,22 +476,17 @@ def _print_hpc_not_found(current_hpc, queues_path, queues_all):
         print("Run `runme queues --all` to see the full table.")
         return
 
-    print("Active hpc '{}' not found in {}.".format(current_hpc, queues_path))
+    print("Active hpc '{}' not found in {}{}.".format(
+        current_hpc, queues_path, annotation))
     print("Available clusters: {}".format(available))
-    print("")
-    print("To use '{}', either:".format(current_hpc))
-    print("  * pick one of the clusters above and update 'hpc' in {}, or"
+    print("To use an hpc for submitting jobs, either:")
+    print("  * update 'hpc' in {} to match an available cluster listed above, or"
           .format(_config.CONFIG_PATH))
-    print("  * add a new cluster block by one of:")
-    print("      - run `runme check queues` on the cluster login node to")
-    print("        autodiscover its (partition, qos, wall) triplets, or")
-    print("      - run `runme config queues` to install a local copy of")
-    print("        queues.json under .runme/ that you can edit by hand.")
-    if is_packaged:
-        print("")
-        print("Note: the path above is the packaged default inside")
-        print("site-packages -- do NOT edit it directly. Use one of the")
-        print("commands above to put a customisable copy in your project.")
+    print("  * run `runme config queues` to install a local copy of")
+    print("    queues.json under .runme/ that you can edit by hand, and add '{}'."
+          .format(current_hpc))
+    print("      - Note, you can run `runme check queues` on the cluster login node to")
+    print("        autodiscover its (partition, qos, wall) triplets.")
 
 
 # ---------------------------------------------------------------------------
