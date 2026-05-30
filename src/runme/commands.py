@@ -482,11 +482,21 @@ def _print_hpc_not_found(current_hpc, queues_path, queues_all):
     print("To use an hpc for submitting jobs, either:")
     print("  * update 'hpc' in {} to match an available cluster listed above, or"
           .format(_config.CONFIG_PATH))
-    print("  * run `runme config queues` to install a local copy of")
-    print("    queues.json under .runme/ that you can edit by hand, and add '{}'."
-          .format(current_hpc))
-    print("      - Note, you can run `runme check queues` on the cluster login node to")
-    print("        autodiscover its (partition, qos, wall) triplets.")
+
+    if os.path.isfile(_config.QUEUES_PATH):
+        # Local copy already exists -- they just need to edit it. Don't
+        # suggest `config queues` (would imply installing on top of the file
+        # they already have).
+        print("  * add '{}' to {} by hand.".format(current_hpc, _config.QUEUES_PATH))
+        print("      - Note, you can run `runme check queues` on the cluster login node to")
+        print("        autodiscover its (partition, qos, wall) triplets.")
+    else:
+        print("  * add '{}' to a local version of the queues list in {}:"
+              .format(current_hpc, _config.QUEUES_PATH))
+        print("      - Run `runme config queues` to install a local copy of")
+        print("        queues.json under .runme/ that you can edit by hand.")
+        print("      - Run `runme check queues` on the cluster login node to")
+        print("        autodiscover its (partition, qos, wall) triplets.")
 
 
 # ---------------------------------------------------------------------------

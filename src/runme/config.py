@@ -130,15 +130,29 @@ def select_hpc_queues(queues_all, hpc):
     """
     if hpc not in queues_all:
         available = ", ".join(queues_all.keys()) or "(none)"
-        raise Exception(
+        header = (
             "Active hpc '{}' not found in queues.json.\n".format(hpc) +
             "Available clusters: {}\n".format(available) +
             "To use an hpc for submitting jobs, either:\n"
-            "  * update 'hpc' in {} to match an available cluster listed above, or\n".format(CONFIG_PATH) +
-            "  * run `runme config queues` to install a local copy of\n"
-            "    queues.json under .runme/ that you can edit by hand, and add '{}'.\n".format(hpc) +
-            "      - Note, you can run `runme check queues` on the cluster login node to\n"
-            "        autodiscover its (partition, qos, wall) triplets.")
+            "  * update 'hpc' in {} to match an available cluster listed above, or\n"
+            .format(CONFIG_PATH)
+        )
+        if os.path.isfile(QUEUES_PATH):
+            tail = (
+                "  * add '{}' to {} by hand.\n".format(hpc, QUEUES_PATH) +
+                "      - Note, you can run `runme check queues` on the cluster login node to\n"
+                "        autodiscover its (partition, qos, wall) triplets."
+            )
+        else:
+            tail = (
+                "  * add '{}' to a local version of the queues list in {}:\n"
+                .format(hpc, QUEUES_PATH) +
+                "      - Run `runme config queues` to install a local copy of\n"
+                "        queues.json under .runme/ that you can edit by hand.\n"
+                "      - Run `runme check queues` on the cluster login node to\n"
+                "        autodiscover its (partition, qos, wall) triplets."
+            )
+        raise Exception(header + tail)
     return queues_all[hpc]
 
 

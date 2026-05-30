@@ -17,4 +17,4 @@ Module map (filled in over the migration phases):
 * ``namelist`` -- Fortran namelist read/write (vendored from runner.ext.namelist)
 """
 
-__version__ = "0.5.5"
+__version__ = "0.5.6"
