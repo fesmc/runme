@@ -75,9 +75,10 @@ def build_parser(hpc_config, info):
         prog="runme",
         description="Stage, run, and submit single simulations and ensembles.",
         epilog=("Subcommands: `runme config`, `runme info`, `runme queues`, "
-                "`runme accounts`, `runme check queues`, `runme sample`, "
-                "`runme product`, `runme update`, `runme version`, "
-                "`runme completions`. Run `runme <subcommand> --help` for details."))
+                "`runme accounts`, `runme readme`, `runme check queues`, "
+                "`runme sample`, `runme product`, `runme update`, "
+                "`runme version`, `runme completions`. "
+                "Run `runme <subcommand> --help` for details."))
 
     parser.add_argument('-V', '--version', action='version',
                         version="%(prog)s " + __version__)
@@ -262,6 +263,7 @@ _SUBCOMMANDS = {
     "info":        _commands.info,
     "queues":      _commands.queues,
     "accounts":    _commands.accounts,
+    "readme":      _commands.readme,
     "completions": _commands.completions,
     "check":       None,  # dispatched below (has nested subcommands)
 }

@@ -514,6 +514,22 @@ def accounts(argv):
 
 
 # ---------------------------------------------------------------------------
+# `runme readme` -- print the packaged README in full
+# ---------------------------------------------------------------------------
+def readme(argv):
+    """Print the packaged README.md to stdout."""
+    if argv:
+        _usage("runme readme")
+        return 1
+    path = os.path.join(_config.PACKAGE_TEMPLATES, "README.md")
+    if not os.path.isfile(path):
+        print("README not found in packaged templates: {}".format(path))
+        return 1
+    _print_file(path)
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # `runme version`
 # ---------------------------------------------------------------------------
 def version(argv):
@@ -530,7 +546,7 @@ def version(argv):
 # ---------------------------------------------------------------------------
 SUBCOMMANDS = [
     "sample", "product", "check", "update",
-    "config", "info", "queues", "accounts", "version",
+    "config", "info", "queues", "accounts", "readme", "version",
     "completions",
 ]
 CONFIG_SUBCOMMANDS = ["init", "queues", "info", "check"]
