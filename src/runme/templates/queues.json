@@ -1,19 +1,4 @@
 {
-    "_doc": [
-        "HPC queue aliases for runme.",
-        "",
-        "Each top-level key (other than _doc) is a cluster name. Set 'hpc' in",
-        ".runme/config.toml to one of these. Inspect the table with",
-        "`runme queues` (current cluster) or `runme queues --all`.",
-        "",
-        "For a new cluster, run `runme check queues` on the login node to",
-        "discover usable (partition, qos, wall) triplets and merge them in.",
-        "",
-        "`job_template` is a path to the SLURM submit-script template; it is",
-        "resolved through the project, then ~/.config/runme/, then the",
-        "packaged default."
-    ],
-
     "pik_hpc2024": {
         "job_template": ".runme/submit_slurm",
         "queues": {

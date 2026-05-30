@@ -93,7 +93,8 @@ def config_queues(argv):
     Order:
 
     1. Resolve and print whatever queues file runme is currently reading
-       (project, ~/.config/runme/, or the packaged default).
+       (project, ~/.config/runme/, or the packaged default), prefixed with
+       the ``## Queues`` section of the packaged README.
     2. Only if ``.runme/queues.json`` does *not* exist locally, offer to
        copy the packaged template in so the user can customise it.
 
@@ -112,7 +113,8 @@ def config_queues(argv):
 
     print("Current queues file ({}):".format(resolved))
     print("")
-    _print_doc_then_file(resolved)
+    _print_readme_section("Queues")
+    _print_file(resolved)
 
     if not os.path.isfile(_config.QUEUES_PATH):
         print("")
@@ -141,14 +143,17 @@ def config_info(argv):
         target=_config.INFO_PATH,
         template_basename="info.json",
         label="info file",
+        readme_section="Info",
     )
 
 
-def _install_and_show(target, template_basename, label):
+def _install_and_show(target, template_basename, label, readme_section):
     """Install (or refresh) a project-local file with no fallback, then print.
 
     Used for ``info.json``: there is no sensible fallback chain, so a missing
     file is copied in immediately; an existing file prompts for overwrite.
+    The matching README section (from the packaged ``README.md``) is shown
+    as a banner above the file contents.
     """
     packaged = os.path.join(_config.PACKAGE_TEMPLATES, template_basename)
 
@@ -171,28 +176,58 @@ def _install_and_show(target, template_basename, label):
     print("Current {} ({}):".format(label, target))
     print("(edit this file directly to change settings)")
     print("")
-    _print_doc_then_file(target)
+    _print_readme_section(readme_section)
+    _print_file(target)
     return 0
 
 
-def _print_doc_then_file(path):
-    """Print the ``_doc`` array (as ``#``-prefixed lines) then the raw file.
+# ---------------------------------------------------------------------------
+# README section banner + raw file printing
+# ---------------------------------------------------------------------------
+def _read_readme_section(name):
+    """Return the lines under ``## <name>`` in the packaged ``README.md``.
 
-    JSON has no comment syntax, so files like ``queues.json`` carry their
-    header instructions under a top-level ``_doc`` array. Showing those as a
-    banner above the file makes the rules visible without leaking into the
-    machine-read data.
+    Case-insensitive heading match. Stops at the next ``## ``. Surrounding
+    blank lines are stripped. Returns ``[]`` if the README or section is
+    missing, so callers can degrade silently when docs are unavailable.
     """
+    path = os.path.join(_config.PACKAGE_TEMPLATES, "README.md")
+    if not os.path.isfile(path):
+        return []
+    target = name.strip().lower()
+    body = []
+    in_section = False
+    with open(path) as f:
+        for raw in f:
+            line = raw.rstrip("\n")
+            if line.startswith("## "):
+                if in_section:
+                    break
+                in_section = line[3:].strip().lower() == target
+                continue
+            if in_section:
+                body.append(line)
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    return body
+
+
+def _print_readme_section(name):
+    """Print a README section as a ``#``-prefixed banner, plus a blank line."""
+    lines = _read_readme_section(name)
+    if not lines:
+        return
+    for line in lines:
+        print("# " + line if line else "#")
+    print("")
+
+
+def _print_file(path):
+    """Print a file's contents verbatim, ensuring a trailing newline."""
     with open(path) as f:
         raw = f.read()
-    try:
-        data = json.loads(raw)
-    except Exception:
-        data = None
-    if isinstance(data, dict) and isinstance(data.get("_doc"), list):
-        for line in data["_doc"]:
-            print("# " + line if line else "#")
-        print("")
     sys.stdout.write(raw)
     if not raw.endswith("\n"):
         sys.stdout.write("\n")
