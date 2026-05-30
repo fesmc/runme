@@ -320,6 +320,15 @@ def info(argv):
     _print_resolved(_config.INFO_PATH, "project info",
                     "Model-specific: executables, par paths, links, files, "
                     "exe/group aliases. Project-local.")
+    _print_resolved(os.path.join(_config.RUNME_DIR, "submit_slurm"),
+                    "submit template",
+                    "SLURM job script template. Substitutes <QOS>, <PARTITION>, "
+                    "<WALL>, <MEM>, <JOBNAME>, <ACCOUNT>, <CMD>, etc. "
+                    "Resolves project -> ~/.config/runme/ -> packaged.")
+    _print_resolved(os.path.join(_config.RUNME_DIR, "submit_slurm_omp"),
+                    "submit template (OMP)",
+                    "OMP fragment spliced in when omp > 0. Sets cpus-per-task "
+                    "and OMP_* env vars. Same fallback chain.")
 
     print("")
     print("Validation:")
