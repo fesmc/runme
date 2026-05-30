@@ -124,15 +124,18 @@ def load():
 def select_hpc_queues(queues_all, hpc):
     """Select the queue block for ``hpc`` from the full queues mapping.
 
-    Raises a clear error listing the available HPCs when ``hpc`` is absent.
-    Only needed at submit time.
+    Raises a clear error listing the available HPCs when ``hpc`` is absent,
+    and points the user at the right next command rather than at the
+    site-packages copy of queues.json. Only needed at submit time.
     """
     if hpc not in queues_all:
         raise Exception(
-            "HPC '{}' not found in queues.json. Available HPCs: {}\n".format(
+            "HPC '{}' not in queues.json. Available: {}\n".format(
                 hpc, ", ".join(queues_all.keys()) or "(none)") +
-            "Set 'hpc' in {} to one of these, or add a block for it "
-            "(see `runme queues --all` and `runme check queues`).".format(CONFIG_PATH))
+            "Either set 'hpc' in {} to one of these, or add a new cluster:\n".format(CONFIG_PATH) +
+            "  * `runme check queues` on the cluster login node (autodiscover), or\n"
+            "  * `runme config queues` to install a local .runme/queues.json to edit.\n"
+            "Run `runme queues --all` to see the full table.")
     return queues_all[hpc]
 
 
