@@ -272,6 +272,7 @@ _CONFIG_SUBCOMMANDS = {
     "init":   _commands.config_init,
     "queues": _commands.config_queues,
     "info":   _commands.config_info,
+    "submit": _commands.config_submit,
     "check":  _commands.config_check,
 }
 
@@ -279,10 +280,11 @@ _CONFIG_SUBCOMMANDS = {
 def _dispatch_config(rest):
     if not rest:
         sys.stderr.write(
-            "usage: runme config <init|queues|info|check>\n"
+            "usage: runme config <init|queues|info|submit|check>\n"
             "  init    scaffold .runme/ and seed config.toml from the tracked default\n"
             "  queues  install/refresh .runme/queues.json from the packaged template\n"
             "  info    install/refresh .runme/info.json from the packaged template\n"
+            "  submit  show / install local submit_slurm{,_omp} templates\n"
             "  check   validate every config file without modifying anything\n"
         )
         return 1

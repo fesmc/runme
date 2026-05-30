@@ -5,6 +5,7 @@ Each function here implements one user-facing command:
 * ``runme config init``     -- scaffold ``.runme/`` and copy templates
 * ``runme config queues``   -- install / refresh / show the queues file
 * ``runme config info``     -- install / refresh / show the project info file
+* ``runme config submit``   -- show / install local submit-script templates
 * ``runme config check``    -- validate every config file without scaffolding
 * ``runme info``            -- diagnostic: every file runme reads + validation
 * ``runme queues``          -- concise queue table (current cluster or all)
@@ -71,8 +72,9 @@ def config_init(argv):
         print("  [ok] {} (already present; not overwritten)".format(_config.CONFIG_PATH))
 
     print("")
-    print("Note: queues.json is provided by the packaged default; run")
-    print("`runme config queues` if you need a local copy to customise.")
+    print("Note: queues.json and the submit templates are provided by the")
+    print("packaged defaults; run `runme config queues` / `runme config submit`")
+    print("if you need local copies to customise.")
     print("")
     print("Next steps:")
     print("  1. Edit {} (set 'hpc' and 'account' at minimum).".format(_config.CONFIG_PATH))
@@ -131,6 +133,63 @@ def config_queues(argv):
         else:
             print("Not copied. Re-run `runme config queues` to install a local "
                   "copy later.")
+    return 0
+
+
+def config_submit(argv):
+    """Show the active submit templates; offer to install local copies if missing.
+
+    Same shape as ``runme config queues``: the packaged ``submit_slurm`` and
+    ``submit_slurm_omp`` resolve through the project -> ``~/.config/runme/``
+    -> packaged chain, so a local copy under ``.runme/`` is opt-in (only
+    needed when you actually want to edit the template).
+
+    Per-cluster overrides via the ``job_template`` field in ``queues.json``
+    are still respected at submit time; this command only installs the
+    standard defaults by basename. Cluster maintainers wanting a different
+    template should drop it into the packaged templates directory and point
+    the cluster's ``job_template`` at it.
+    """
+    if argv:
+        _usage("runme config submit")
+        return 1
+
+    templates = ("submit_slurm", "submit_slurm_omp")
+
+    print("Current submit templates:")
+    print("")
+    _print_readme_section("Submit templates")
+
+    for name in templates:
+        local = os.path.join(_config.RUNME_DIR, name)
+        resolved = _config.resolve_file(local)
+        if not os.path.isfile(resolved):
+            print("  {:<20s} (missing)".format(name + ":"))
+        else:
+            print("  {:<20s} {}".format(name + ":", resolved))
+
+    missing_local = [name for name in templates
+                     if not os.path.isfile(os.path.join(_config.RUNME_DIR, name))]
+    if not missing_local:
+        return 0
+
+    print("")
+    print("Missing local copies in {}/: {}.".format(
+        _config.RUNME_DIR, ", ".join(missing_local)))
+    print("To customise a submit template, a local version is needed.")
+    if _config.confirm(
+            "Copy packaged template{} ({}) into '{}/'? (Y/n) "
+            .format("s" if len(missing_local) > 1 else "",
+                    ", ".join(missing_local), _config.RUNME_DIR)):
+        os.makedirs(_config.RUNME_DIR, exist_ok=True)
+        for name in missing_local:
+            packaged = os.path.join(_config.PACKAGE_TEMPLATES, name)
+            target = os.path.join(_config.RUNME_DIR, name)
+            shutil.copy(packaged, target)
+            print("Copied packaged template to '{}'.".format(target))
+    else:
+        print("Not copied. Re-run `runme config submit` to install local "
+              "copies later.")
     return 0
 
 
@@ -605,7 +664,7 @@ SUBCOMMANDS = [
     "config", "info", "queues", "accounts", "readme", "version",
     "completions",
 ]
-CONFIG_SUBCOMMANDS = ["init", "queues", "info", "check"]
+CONFIG_SUBCOMMANDS = ["init", "queues", "info", "submit", "check"]
 
 
 def completions(argv):
