@@ -225,10 +225,28 @@ def build_context(args, hpc_config, queues_all, info):
 RUNME_GIT_URL = "git+https://github.com/fesmc/runme.git"
 
 
-def _update():
-    """Upgrade the installed runme package from GitHub via pip."""
+def _update(rest):
+    """Upgrade the installed runme package from GitHub via pip.
+
+    Optional positional ``ref`` (``runme update <ref>``) selects a git branch,
+    tag, or commit SHA — e.g. ``runme update dev`` installs from the ``dev``
+    branch. With no ``ref``, pip pulls the repo's default branch.
+    """
     import subprocess
-    cmd = [sys.executable, "-m", "pip", "install", "-U", RUNME_GIT_URL]
+    if rest and rest[0] in ("-h", "--help"):
+        print("usage: runme update [<ref>]\n"
+              "  <ref>  optional git branch, tag, or commit SHA "
+              "(default: repo's default branch)")
+        return 0
+    url = RUNME_GIT_URL
+    if rest:
+        if len(rest) > 1:
+            sys.stderr.write(
+                "runme update: expected at most one ref, got {}\n".format(
+                    " ".join(rest)))
+            return 2
+        url = "{}@{}".format(RUNME_GIT_URL, rest[0])
+    cmd = [sys.executable, "-m", "pip", "install", "-U", url]
     print("Updating runme: {}".format(" ".join(cmd)))
     return subprocess.call(cmd)
 
@@ -257,7 +275,7 @@ def main(argv=None):
 _SUBCOMMANDS = {
     "sample":      lambda rest: _sample.main_sample(rest) or 0,
     "product":     lambda rest: _sample.main_product(rest) or 0,
-    "update":      lambda rest: _update(),
+    "update":      lambda rest: _update(rest),
     "version":     _commands.version,
     "config":      None,  # dispatched below (has nested subcommands)
     "info":        _commands.info,
