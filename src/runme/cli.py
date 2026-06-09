@@ -132,9 +132,13 @@ def build_parser(hpc_config, info):
     requiredNamed.add_argument('-o', dest='rundir', metavar='RUNDIR/OUTDIR', type=str, required=True,
                                help='Run directory (single sim) or experiment directory (ensemble).')
 
-    if info["par_path_as_argument"] is True:
-        requiredNamed.add_argument('-n', dest='par_path', metavar='PAR_PATH', type=str, required=True,
-                                   help='Path to input parameter file/folder.')
+    # `-n` is always registered so help is stable across projects. Whether it
+    # is actually required (or ignored) depends on the project's
+    # `par_path_as_argument` flag; that check happens in `build_context`.
+    parser.add_argument('-n', dest='par_path', metavar='PAR_PATH', type=str, default=None,
+                        help='Path to input parameter file/folder. Required when the '
+                             'executable takes a par file as an argument (e.g. yelmo/yelmox); '
+                             'ignored otherwise (e.g. climber).')
 
     return parser
 
@@ -160,8 +164,14 @@ def build_context(args, hpc_config, queues_all, info):
     par_path = getattr(args, 'par_path', None)
 
     if info["par_path_as_argument"] is True:
+        if par_path is None:
+            sys.exit("error: -n/PAR_PATH is required for this project "
+                     "(par_path_as_argument=true in .runme/info.json).")
         exe_args = os.path.basename(par_path)
     else:
+        if par_path is not None:
+            print("warning: -n ignored (par_path_as_argument=false for this project).")
+            par_path = None
         exe_args = ""
 
     profiler_prefix = ""
