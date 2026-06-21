@@ -3,7 +3,8 @@
 Dispatch:
 
 * ``runme <subcommand> ...`` -> see :mod:`runme.commands` (config, info,
-  queues, accounts, version, completions, sample, product, check, update).
+  queues, accounts, version, completions, sample, product, check, update) and
+  ``runme case save`` (see :mod:`runme.cases`).
 * ``runme ...`` (no subcommand) -> single simulation or ensemble run.
 
 The run path takes ``-o RUNDIR`` and ``-p KEY=VAL`` overrides. A ``-p`` value
@@ -108,8 +109,8 @@ def build_parser(hpc_config, info):
         description="Stage, run, and submit single simulations and ensembles.",
         epilog=("Subcommands: `runme config`, `runme info`, `runme queues`, "
                 "`runme accounts`, `runme readme`, `runme check queues`, "
-                "`runme sample`, `runme product`, `runme update`, "
-                "`runme version`, `runme completions`. "
+                "`runme case save`, `runme sample`, `runme product`, "
+                "`runme update`, `runme version`, `runme completions`. "
                 "Run `runme <subcommand> --help` for details."))
 
     parser.add_argument('-V', '--version', action='version',

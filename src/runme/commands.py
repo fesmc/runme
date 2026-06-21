@@ -662,7 +662,7 @@ def version(argv):
 SUBCOMMANDS = [
     "sample", "product", "check", "update",
     "config", "info", "queues", "accounts", "readme", "version",
-    "completions",
+    "completions", "case",
 ]
 CONFIG_SUBCOMMANDS = ["init", "queues", "info", "submit", "check"]
 
@@ -692,6 +692,7 @@ def completions(argv):
             print("complete -c runme -n '__fish_seen_subcommand_from config' "
                   "-a '{}'".format(s))
         print("complete -c runme -n '__fish_seen_subcommand_from check' -a 'queues'")
+        print("complete -c runme -n '__fish_seen_subcommand_from case' -a 'save'")
         print("complete -c runme -n '__fish_seen_subcommand_from completions' "
               "-a 'bash zsh fish'")
     return 0
@@ -717,6 +718,11 @@ _runme_complete() {{
         check)
             if [ "$COMP_CWORD" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "queues" -- "$cur") )
+            fi
+            ;;
+        case)
+            if [ "$COMP_CWORD" -eq 2 ]; then
+                COMPREPLY=( $(compgen -W "save" -- "$cur") )
             fi
             ;;
         completions)
@@ -746,6 +752,9 @@ _runme() {{
             ;;
         check)
             (( CURRENT == 3 )) && compadd queues
+            ;;
+        case)
+            (( CURRENT == 3 )) && compadd save
             ;;
         completions)
             (( CURRENT == 3 )) && compadd bash zsh fish
