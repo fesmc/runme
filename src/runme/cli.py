@@ -44,6 +44,38 @@ def _coerce(valstr):
         return valstr
 
 
+def load_overlay(par_path, info):
+    """Read the ``-n`` parameter file as an overlay dict.
+
+    For projects that take the parameter file as an executable argument
+    (``par_path_as_argument=true``) the ``-n`` file is staged and used directly,
+    so there is nothing to overlay and ``{}`` is returned. Otherwise the file's
+    parameters are returned as an ordered ``{group.name: value}`` dict so they
+    can be merged into the project's default parameter files.
+    """
+    if par_path is None or info["par_path_as_argument"]:
+        return odict()
+    from runme.namelist import Namelist
+    with open(par_path) as f:
+        return Namelist().load(f)
+
+
+def merge_overlay(overlay, fixed, grp_aliases):
+    """Layer single-valued ``-p`` overrides on top of the ``-n`` overlay params.
+
+    Overlay keys carry real group names (read from the namelist file) while
+    ``-p`` keys may use group aliases, so the ``-p`` overrides are normalised
+    first; that guarantees a ``-p`` override wins over the same overlay
+    parameter instead of producing two divergent keys.
+    """
+    if not overlay:
+        return fixed
+    from runme.namelist import param_map_groups
+    merged = odict(overlay)
+    merged.update(param_map_groups(fixed, grp_aliases))
+    return merged
+
+
 def classify_params(raw):
     """Split raw ``key=spec`` entries into ensemble specs and fixed overrides.
 
@@ -169,9 +201,9 @@ def build_context(args, hpc_config, queues_all, info):
                      "(par_path_as_argument=true in .runme/info.json).")
         exe_args = os.path.basename(par_path)
     else:
-        if par_path is not None:
-            print("warning: -n ignored (par_path_as_argument=false for this project).")
-            par_path = None
+        # -n is optional here; when given it is an overlay whose parameters are
+        # merged into the project's default parameter files (see _load_overlay),
+        # not an executable argument.
         exe_args = ""
 
     profiler_prefix = ""
@@ -207,7 +239,7 @@ def build_context(args, hpc_config, queues_all, info):
     if not os.path.isfile(exe_path):
         print("Input file does not exist: {}".format(exe_path))
         sys.exit()
-    if info["par_path_as_argument"] is True and not os.path.isfile(par_path):
+    if par_path is not None and not os.path.isfile(par_path):
         print("Input file does not exist: {}".format(par_path))
         sys.exit()
 
@@ -368,6 +400,12 @@ def _main(argv):
 
     ensemble_specs, fixed = classify_params(args.p)
     ctx = build_context(args, hpc_config, queues_all, info)
+
+    # Fold any -n overlay (for projects that don't take the par file as an
+    # executable argument) into the fixed overrides applied to every run, with
+    # -p winning on conflict.
+    overlay = load_overlay(ctx.par_path, info)
+    fixed = merge_overlay(overlay, fixed, info["grp_aliases"])
 
     is_ensemble = bool(args.params_file) or bool(ensemble_specs)
 
