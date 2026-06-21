@@ -8,9 +8,13 @@ This module provides the ``-n`` name resolution (:func:`resolve_par_path`).
 """
 import os
 import glob
+import json
 
 # Folder searched when ``-n NAME`` is not an existing path.
 CASES_DIR = "cases"
+
+# Per-rundir record written by runme.stage (kept in sync with stage.RECORD).
+RECORD = "runme.json"
 
 
 def resolve_par_path(par_path):
@@ -48,3 +52,38 @@ def resolve_par_path(par_path):
         "parameter file not found: '{}' is neither an existing path nor a case "
         "in {}/ (looked for {}, {} and {}.*).".format(
             par_path, CASES_DIR, par_path, exact, exact))
+
+
+def save_case(name, rundir, grp_aliases=None):
+    """Save the parameters applied in ``rundir`` as a case file under ``cases/``.
+
+    Reads the run's record (``runme.json``) and writes its applied parameters as
+    a partial namelist to ``cases/<name>`` (a ``.nml`` extension is added when
+    ``name`` has none). Group aliases are normalised to their real group names so
+    the saved file is a valid standalone namelist. Works for any run directory
+    that has a record with applied parameters, including an ensemble member.
+    """
+    record_path = os.path.join(rundir, RECORD)
+    if not os.path.isfile(record_path):
+        raise FileNotFoundError(
+            "no {} in '{}' — not a runme run directory.".format(RECORD, rundir))
+
+    with open(record_path) as f:
+        params = json.load(f).get("params") or {}
+    if not params:
+        raise ValueError(
+            "run '{}' has no applied parameters to save as a case.".format(rundir))
+
+    if grp_aliases:
+        from runme.namelist import param_map_groups
+        params = param_map_groups(params, grp_aliases)
+
+    from runme.namelist import Namelist
+    os.makedirs(CASES_DIR, exist_ok=True)
+    if os.path.splitext(name)[1] == "":
+        name = name + ".nml"
+    dest = os.path.join(CASES_DIR, name)
+    with open(dest, "w") as f:
+        Namelist().dump(params, f)
+    print("Saved case: {}".format(dest))
+    return dest

@@ -326,6 +326,7 @@ _SUBCOMMANDS = {
     "readme":      _commands.readme,
     "completions": _commands.completions,
     "check":       None,  # dispatched below (has nested subcommands)
+    "case":        None,  # dispatched below (has nested subcommands)
 }
 
 _CONFIG_SUBCOMMANDS = {
@@ -365,6 +366,29 @@ def _dispatch_check(rest):
     return _discover.main_check(rest) or 0
 
 
+def _dispatch_case(rest):
+    if not rest or rest[0] != "save":
+        sys.stderr.write("usage: runme case save NAME -o RUNDIR\n"
+                         "  save the parameters applied in RUNDIR as cases/NAME\n")
+        return 1
+    p = argparse.ArgumentParser(prog="runme case save")
+    p.add_argument("name", help="case name (written to cases/NAME[.nml])")
+    p.add_argument("-o", dest="rundir", metavar="RUNDIR", required=True,
+                   help="run directory whose applied parameters are saved")
+    ns = p.parse_args(rest[1:])
+
+    grp_aliases = {}
+    try:
+        _, _, info = _config.load()
+        grp_aliases = info.get("grp_aliases", {})
+    except Exception:
+        pass  # outside a project: save without group-alias normalisation
+
+    from runme import cases as _cases
+    _cases.save_case(ns.name, ns.rundir, grp_aliases)
+    return 0
+
+
 def _main(argv):
     # Top-level subcommand dispatch.
     if argv and argv[0] in _SUBCOMMANDS:
@@ -373,6 +397,8 @@ def _main(argv):
             return _dispatch_config(rest)
         if sub == "check":
             return _dispatch_check(rest)
+        if sub == "case":
+            return _dispatch_case(rest)
         return _SUBCOMMANDS[sub](rest)
 
     # --version still works outside a project (handy after `pip install`).
