@@ -398,6 +398,11 @@ def _main(argv):
     parser = build_parser(hpc_config, info)
     args = parser.parse_args(argv)
 
+    # Resolve -n: a real path is used as-is; a bare name falls back to cases/.
+    if args.par_path is not None:
+        from runme import cases as _cases
+        args.par_path = _cases.resolve_par_path(args.par_path)
+
     ensemble_specs, fixed = classify_params(args.p)
     ctx = build_context(args, hpc_config, queues_all, info)
 
