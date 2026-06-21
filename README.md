@@ -132,7 +132,51 @@ The steps carried out are:
    just stage everything).
 
 Parameters can be modified inline with `-p KEY=VALUE [KEY=VALUE ...]`; the changes
-are written to the parameter file copied into the run directory.
+are written to the parameter file copied into the run directory. A `-p` key must
+already exist in one of the parameter files being staged — runme will not create
+new parameters, so a typo'd name is reported rather than silently added.
+
+### How `-n` is used
+
+For projects whose executable takes the parameter file as an argument
+(`par_path_as_argument=true`), `-n` names that file: it is copied into the run
+directory and passed to the model.
+
+For projects that read their own fixed-name parameter files
+(`par_path_as_argument=false`, e.g. climber-x), `-n` is **optional** and acts as
+an *overlay*: the parameters in the named file are merged into the project's
+default parameter files. Precedence is
+
+```
+default parameter files  →  -n overlay  →  -p overrides
+```
+
+so a `-p` flag wins over the same parameter set in the overlay file.
+
+## Cases
+
+A *case* is just a normal (partial or complete) namelist parameter file kept in
+a `cases/` folder, capturing a configuration worth reusing. Use one via `-n`:
+pass its path, or pass a bare name and runme looks it up under `cases/`
+(`cases/NAME`, or `cases/NAME.*` when a single file matches, so the extension can
+be omitted):
+
+```bash
+runme -r -o output/run -n spinup                 # uses cases/spinup(.nml)
+runme -r -o output/run -n spinup -p ctl.year=10  # case, then tweak on top
+```
+
+Because a case is loaded through the overlay path above, `-p` overrides layer on
+top of it — handy for running permutations from a saved baseline.
+
+Save the parameters applied in any run directory as a case with:
+
+```bash
+runme case save NAME -o RUNDIR
+```
+
+This reads `RUNDIR/runme.json` and writes its applied parameters as a partial
+namelist to `cases/NAME.nml`. It works for an ensemble member directory too.
 
 ### What gets produced
 
