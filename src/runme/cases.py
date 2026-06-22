@@ -1,8 +1,9 @@
 """Saved parameter "cases".
 
-A case is just a normal (partial or complete) namelist parameter file kept in
-the project's ``cases/`` folder. It is used via ``-n``: pass a path as usual, or
-pass a bare case name and runme will look it up under ``cases/``.
+A case is just a normal (partial or complete) parameter file kept in the
+project's ``cases/`` folder, in any supported format (``.nml``/``.par``
+namelist, ``.toml``, ``.json``, or ``.jl``). It is used via ``-n``: pass a path
+as usual, or pass a bare case name and runme will look it up under ``cases/``.
 
 This module provides the ``-n`` name resolution (:func:`resolve_par_path`).
 """
@@ -58,10 +59,11 @@ def save_case(name, rundir, grp_aliases=None):
     """Save the parameters applied in ``rundir`` as a case file under ``cases/``.
 
     Reads the run's record (``runme.json``) and writes its applied parameters as
-    a partial namelist to ``cases/<name>`` (a ``.nml`` extension is added when
-    ``name`` has none). Group aliases are normalised to their real group names so
-    the saved file is a valid standalone namelist. Works for any run directory
-    that has a record with applied parameters, including an ensemble member.
+    a partial parameter file to ``cases/<name>``, in the format implied by the
+    extension (a ``.nml`` extension is added when ``name`` has none). Group
+    aliases are normalised to their real group names so the saved file is a
+    valid standalone parameter file. Works for any run directory that has a
+    record with applied parameters, including an ensemble member.
     """
     record_path = os.path.join(rundir, RECORD)
     if not os.path.isfile(record_path):
@@ -78,12 +80,12 @@ def save_case(name, rundir, grp_aliases=None):
         from runme.namelist import param_map_groups
         params = param_map_groups(params, grp_aliases)
 
-    from runme.namelist import Namelist
+    from runme.filetype import filetype_for_path
     os.makedirs(CASES_DIR, exist_ok=True)
     if os.path.splitext(name)[1] == "":
         name = name + ".nml"
     dest = os.path.join(CASES_DIR, name)
     with open(dest, "w") as f:
-        Namelist().dump(params, f)
+        filetype_for_path(dest).dump(params, f)
     print("Saved case: {}".format(dest))
     return dest

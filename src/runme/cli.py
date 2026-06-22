@@ -56,9 +56,9 @@ def load_overlay(par_path, info):
     """
     if par_path is None or info["par_path_as_argument"]:
         return odict()
-    from runme.namelist import Namelist
+    from runme.filetype import filetype_for_path
     with open(par_path) as f:
-        return Namelist().load(f)
+        return filetype_for_path(par_path).load(f)
 
 
 def merge_overlay(overlay, fixed, grp_aliases):

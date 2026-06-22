@@ -136,6 +136,14 @@ are written to the parameter file copied into the run directory. A `-p` key must
 already exist in one of the parameter files being staged — runme will not create
 new parameters, so a typo'd name is reported rather than silently added.
 
+Parameter files are read and written in the format implied by their extension:
+Fortran namelist (`.nml`, `.par`), TOML (`.toml`), JSON (`.json`), and a flat
+line format (`.jl`) of `group.name = value` assignments — one per line, which
+also happens to be valid Julia (the file `include`s cleanly when the matching
+structs already exist). All use the same `group.name` keys, so a TOML
+`[control]` table (or a JSON `{"control": {...}}` object) with `tau = 1.0` is
+addressed as `control.tau`, exactly like the namelist group.
+
 ### How `-n` is used
 
 For projects whose executable takes the parameter file as an argument
@@ -155,8 +163,9 @@ so a `-p` flag wins over the same parameter set in the overlay file.
 
 ## Cases
 
-A *case* is just a normal (partial or complete) namelist parameter file kept in
-a `cases/` folder, capturing a configuration worth reusing. Use one via `-n`:
+A *case* is just a normal (partial or complete) parameter file (namelist, TOML,
+JSON, or `.jl`) kept in a `cases/` folder, capturing a configuration worth
+reusing. Use one via `-n`:
 pass its path, or pass a bare name and runme looks it up under `cases/`
 (`cases/NAME`, or `cases/NAME.*` when a single file matches, so the extension can
 be omitted):
@@ -176,7 +185,9 @@ runme case save NAME -o RUNDIR
 ```
 
 This reads `RUNDIR/runme.json` and writes its applied parameters as a partial
-namelist to `cases/NAME.nml`. It works for an ensemble member directory too.
+parameter file to `cases/NAME` — `cases/NAME.nml` by default, or the format
+given by an explicit extension (e.g. `NAME.toml`). It works for an ensemble
+member directory too.
 
 ### What gets produced
 

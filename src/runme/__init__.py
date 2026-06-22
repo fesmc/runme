@@ -14,7 +14,8 @@ Module map (filled in over the migration phases):
 * ``params``   -- parameter parsing and the parameter matrix (vendored from runner)
 * ``dist``     -- distribution specs for continuous sampling (vendored from runner)
 * ``sample``   -- factorial product, Latin-hypercube, and Monte-Carlo sampling
+* ``filetype`` -- parameter-file formats (TOML, JSON, .jl) and extension dispatch
 * ``namelist`` -- Fortran namelist read/write (vendored from runner.ext.namelist)
 """
 
-__version__ = "0.5.12"
+__version__ = "0.5.13"

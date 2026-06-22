@@ -1,33 +1,19 @@
 """Fortran namelist read/write.
 
 Vendored from ``runner.ext.namelist`` (originally adapted from
-https://github.com/leifdenby/namelist_python). Python 3 only; the
-``runner.filetype.FileType`` base is inlined here as :class:`FileType` so the
-module has no dependency on the runner package.
+https://github.com/leifdenby/namelist_python). Python 3 only. The
+:class:`~runme.filetype.FileType` base lives in :mod:`runme.filetype` alongside
+the other formats and the extension dispatcher.
 
 The public helpers used by runme are :func:`param_write_to_files` (write a dict
-of ``group.name`` parameters into one or more namelist files) and the
-:class:`Namelist` format itself.
+of ``group.name`` parameters into one or more parameter files, each in the
+format implied by its extension) and the :class:`Namelist` format itself.
 """
 from collections import OrderedDict as odict
 import re
 from itertools import groupby
 
-
-class FileType(object):
-    """Minimal parameter-file base: subclasses implement ``dumps``/``loads``."""
-
-    def dumps(self, params):
-        raise NotImplementedError()
-
-    def loads(self, string):
-        raise NotImplementedError()
-
-    def dump(self, params, f):
-        f.write(self.dumps(params))
-
-    def load(self, f):
-        return self.loads(f.read())
+from runme.filetype import FileType, filetype_for_path
 
 
 class ParamNml(object):
@@ -250,7 +236,7 @@ def param_check_all(params, par_paths):
     # Get all possible parameters from input files
     params_all = []
     for path in par_paths:
-        params_all.append(Namelist().load(open(path)))
+        params_all.append(filetype_for_path(path).load(open(path)))
 
     # Extract set of keys from all files
     all_keys = set(k for d in params_all for k in d)
@@ -268,19 +254,21 @@ def param_check_all(params, par_paths):
 
 
 def param_write_to_file(params, par_src_path, par_dst_path):
-    """Load parameters from a namelist parameter file, update values according to
-    the dictionary provided, and then write the updated namelist parameter file.
+    """Load parameters from a parameter file, update values according to the
+    dictionary provided, and then write the updated parameter file. The on-disk
+    format of each path is chosen from its extension, so source and destination
+    may even differ in format.
     """
-    # Load input namelist parameters
-    params_now = Namelist().load(open(par_src_path))
+    # Load input parameters in the source file's format
+    params_now = filetype_for_path(par_src_path).load(open(par_src_path))
 
     # Update parameters with desired values (only update parameter values if the
     # parameters are defined in this set)
     params_now = nml_update_if_exists(params_now, params)
 
-    # Write updated parameter file to rundir
+    # Write updated parameter file to rundir in the destination's format
     f = open(par_dst_path, 'w')
-    Namelist().dump(params_now, f)
+    filetype_for_path(par_dst_path).dump(params_now, f)
 
     return
 

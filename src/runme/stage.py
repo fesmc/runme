@@ -17,6 +17,7 @@ import subprocess as subp
 from itertools import chain
 
 from runme import __version__
+from runme.filetype import PARAM_EXTENSIONS
 from runme.namelist import param_write_to_files
 from runme.params import str_dataframe
 
@@ -187,8 +188,10 @@ def copy_files(paths, rundir):
 def makedirs(dirname, remove):
     """Create a directory (and parents).
 
-    If it already exists and ``remove`` is set, clear stale ``*.nc`` / ``*.nml``
-    files from it.
+    If it already exists and ``remove`` is set, clear stale ``*.nc`` output and
+    parameter files (``*.nml``, ``*.par``, ``*.toml``, ``*.json``) from it. The
+    ``runme.json`` record is runme's own metadata, not a model parameter file,
+    so it is preserved despite sharing the ``.json`` extension.
     """
     try:
         os.makedirs(dirname)
@@ -197,10 +200,12 @@ def makedirs(dirname, remove):
         if os.path.isdir(dirname):
             print('Directory already exists: {}'.format(dirname))
             if remove:
-                for f in glob.glob("{}/*.nc".format(dirname)):
-                    os.remove(f)
-                for f in glob.glob("{}/*.nml".format(dirname)):
-                    os.remove(f)
+                stale_globs = ["*.nc"] + ["*{}".format(ext) for ext in PARAM_EXTENSIONS]
+                for pattern in stale_globs:
+                    for f in glob.glob("{}/{}".format(dirname, pattern)):
+                        if os.path.basename(f) == RECORD:
+                            continue
+                        os.remove(f)
         else:
             # There was an error on creation, so make sure we know about it
             raise
