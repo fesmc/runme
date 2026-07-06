@@ -141,6 +141,11 @@ def build_parser(hpc_config, info):
     parser.add_argument('-v', action="store_true", help='Verbose script output?')
     parser.add_argument('--debug', action="store_true",
                         help='Print a full traceback on error.')
+    parser.add_argument('--gen-maps', dest='gen_maps', action='store_true',
+                        help='Run a single map-generating simulation into '
+                             '<OUTDIR>/mapgen/ (the single sim, or ensemble member 0), '
+                             'then re-run the same command without --gen-maps for the '
+                             'real run/ensemble.')
 
     # Ensemble options.
     grp = parser.add_argument_group('ensemble options')
@@ -441,6 +446,9 @@ def _main(argv):
 
     is_ensemble = bool(args.params_file) or bool(ensemble_specs)
 
+    # Build the ensemble parameter matrix up front (shared by the --gen-maps
+    # short-circuit and the real ensemble run below).
+    xparams = None
     if is_ensemble:
         from runme import ensemble as _ensemble
         from runme.params import XParams, MultiParam, Param
@@ -457,6 +465,24 @@ def _main(argv):
                                  "`runme sample ... -o FILE`, then `runme -i FILE ...`")
             xparams = MultiParam([Param.parse(spec) for spec in ensemble_specs]).product()
 
+    # --gen-maps: run exactly one simulation into <OUTDIR>/mapgen/ to warm the
+    # shared linked map cache, then exit. The run/submit flags are honoured as
+    # given, so this is the real command minus the flag, redirected to mapgen/.
+    if args.gen_maps:
+        if is_ensemble:
+            row0 = list(xparams.pset_as_array(0))
+            params = odict(zip(xparams.names, row0))
+            params.update(fixed)
+        else:
+            params = odict(fixed)
+        rundir = os.path.join(args.rundir, "mapgen")
+        _run.execute_one(rundir, params, ctx, create=True)
+        if not ctx.dry_run:
+            _stage.write_run_tables(rundir, list(params.keys()), list(params.values()),
+                                    runid="mapgen")
+        return 0
+
+    if is_ensemble:
         indices = _ensemble.parse_slurm_array_indices(args.runid) if args.runid else None
         _ensemble.run(ctx, xparams, fixed, expdir=args.rundir, indices=indices,
                       autodir=args.auto_dir, include_default=args.include_default)

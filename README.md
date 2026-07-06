@@ -286,3 +286,28 @@ and ranges (`a=0:10:5`) are also accepted.
 
 Add `--dry-run` to print what would be staged and run for each member without
 creating or running anything.
+
+## Generating maps first (`--gen-maps`)
+
+Some models (e.g. climber-x, and sometimes yelmox) generate interpolation maps
+between grids on their first run and cache them in a shared, linked input folder.
+Launching a whole ensemble before those maps exist makes every member try to
+build the same maps at once. To avoid that, do one map-generating run first.
+
+Add `--gen-maps` to your normal command. It runs a **single** simulation into a
+`mapgen/` subfolder of `-o OUTDIR` — the single sim itself, or member 0 of an
+ensemble (plus any fixed `-p` overrides) — and then exits:
+
+```bash
+runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10 --gen-maps   # warms the maps
+runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10              # the real ensemble
+```
+
+The first command stages and runs `OUTDIR/mapgen/`; once it finishes, drop
+`--gen-maps` and re-run the *same* command to launch the real single run or
+ensemble, which reuses the cached maps. `mapgen/` sits alongside the member
+directories (`0`, `1`, …) and is left in place.
+
+Run/submit flags are honoured as given: with `-r` the mapgen run runs in the
+background, and with `-s -r` it is submitted to the queue (wait for that job to
+finish before launching the ensemble).
