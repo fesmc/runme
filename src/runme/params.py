@@ -28,6 +28,39 @@ LHS_CRITERION = 'centermaximin'
 # ---------------------------------------------------------------------------
 # Minimal fixed-width table I/O (vendored from runner.tools.frame)
 # ---------------------------------------------------------------------------
+def _format_cell(value):
+    """Render one table cell. Vectors are written space-free (``[1,2,3]``) so
+    the whitespace-delimited table stays a fixed column count and re-reads
+    (see :func:`_split_ws_top_level`)."""
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(str(_format_cell(v)) for v in value) + "]"
+    return value
+
+
+def _split_ws_top_level(line):
+    """Split ``line`` on whitespace, ignoring whitespace inside ``[...]`` so a
+    vector cell stays a single token."""
+    tokens = []
+    depth = 0
+    current = []
+    for ch in line:
+        if ch == '[':
+            depth += 1
+            current.append(ch)
+        elif ch == ']':
+            depth -= 1
+            current.append(ch)
+        elif ch.isspace() and depth == 0:
+            if current:
+                tokens.append(''.join(current))
+                current = []
+        else:
+            current.append(ch)
+    if current:
+        tokens.append(''.join(current))
+    return tokens
+
+
 def str_dataframe(pnames, pmatrix, max_rows=int(1e20), include_index=False, index=None):
     """Pretty-print a matrix like pandas, using only basic python."""
     col_width_default = 6
@@ -50,9 +83,10 @@ def str_dataframe(pnames, pmatrix, max_rows=int(1e20), include_index=False, inde
 
     lines = []
     for i, pset in enumerate(pmatrix):
+        pset = [_format_cell(v) for v in pset]
         if include_index:
             ix = i if index is None else index[i]
-            pset = [ix] + list(pset)
+            pset = [ix] + pset
         lines.append(line_fmt.format(*pset))
 
     n = len(lines)
@@ -85,7 +119,7 @@ def read_dataframe(pfile):
         line = line.strip()
         if not line:
             continue
-        pvalues.append([parse_val(tok) for tok in line.split()])
+        pvalues.append([parse_val(tok) for tok in _split_ws_top_level(line)])
     return pnames, pvalues
 
 
