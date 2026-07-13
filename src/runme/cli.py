@@ -9,8 +9,10 @@ Dispatch:
 
 The run path takes ``-o RUNDIR`` and ``-p KEY=VAL`` overrides. A ``-p`` value
 is "ensemble-shaped" when it contains a comma (list), a colon (range), or
-``?`` (distribution); single-valued ``-p`` entries are fixed overrides applied
-to every run, and any ensemble-shaped entry triggers ensemble mode.
+``?`` (distribution) at bracket-depth 0; single-valued ``-p`` entries are fixed
+overrides applied to every run, and any ensemble-shaped entry triggers ensemble
+mode. A bracket literal (``a=[1,2,3]``) is a single fixed vector value, and a
+list of them (``a=[1,2],[3,4]``) is an ensemble dimension over vectors.
 """
 import os
 import sys
@@ -174,7 +176,8 @@ def build_parser(hpc_config, info):
     parser.add_argument("-p", metavar="KEY=VALUE", nargs='+',
                         help="Set parameters. A single value is a fixed override applied to every run; "
                              "a comma list (a=1,2,3), range (a=0:10:5), or distribution (a=U?0,1) defines "
-                             "an ensemble dimension.")
+                             "an ensemble dimension. A bracket literal (a=[1,2,3]) is a fixed vector value; "
+                             "a list of them (a=[1,2],[3,4]) is an ensemble over vectors.")
 
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument('-o', dest='rundir', metavar='RUNDIR/OUTDIR', type=str, required=True,

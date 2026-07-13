@@ -136,6 +136,12 @@ are written to the parameter file copied into the run directory. A `-p` key must
 already exist in one of the parameter files being staged — runme will not create
 new parameters, so a typo'd name is reported rather than silently added.
 
+A value may be a vector, written as a bracket literal: `-p 'ctl.years=[10,20,30]'`
+sets a single array-valued parameter (serialized as `[10, 20, 30]` in TOML/`.jl`,
+space-separated in a namelist). Commas inside the brackets belong to the vector,
+not to an ensemble dimension. Quote the entry — `[` is a glob character in most
+shells.
+
 Parameter files are read and written in the format implied by their extension:
 Fortran namelist (`.nml`, `.par`), TOML (`.toml`), JSON (`.json`), and a flat
 line format (`.jl`) of `group.name = value` assignments — one per line, which
@@ -222,6 +228,10 @@ every member:
 ```bash
 runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10 ctl.year=5000 smb.alb_ice=0.3,0.4
 ```
+
+A list of vector values is an ensemble over those vectors — `-p ctl.years=[10,20],[30,40]`
+runs two members, one per vector (whereas `-p ctl.years=[10,20]` is a single fixed
+vector on every run).
 
 Use `-a` for run directories named from the parameter values instead of the run id:
 
