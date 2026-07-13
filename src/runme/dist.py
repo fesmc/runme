@@ -16,8 +16,37 @@ Dropped: the Bayesian-only helpers (``cost``, ``dummydist``, the
 import numpy as np
 
 
+def split_top_level(string, sep=','):
+    """Split ``string`` on ``sep``, ignoring separators inside ``[...]``.
+
+    So ``[1,2],[3,4]`` splits into ``["[1,2]", "[3,4]"]`` (two vectors) while
+    ``[1,2,3]`` stays whole (one vector). ``sep`` is a single character.
+    """
+    parts = []
+    depth = 0
+    current = []
+    for ch in string:
+        if ch == '[':
+            depth += 1
+        elif ch == ']':
+            depth -= 1
+        if ch == sep and depth == 0:
+            parts.append(''.join(current))
+            current = []
+        else:
+            current.append(ch)
+    parts.append(''.join(current))
+    return parts
+
+
 def parse_val(s):
-    "string to int, float, or str"
+    "string to int, float, str, or list (from a ``[...]`` literal)"
+    s = s.strip()
+    if s.startswith('[') and s.endswith(']'):
+        inner = s[1:-1].strip()
+        if not inner:
+            return []
+        return [parse_val(tok) for tok in split_top_level(inner, ',')]
     try:
         val = int(s)
     except ValueError:
@@ -50,7 +79,7 @@ def parse_list(string):
     """List of parameters: VALUE[,VALUE,...]"""
     if not string:
         raise ValueError("empty list")
-    return [parse_val(value) for value in string.split(',')]
+    return [parse_val(value) for value in split_top_level(string, ',')]
 
 
 def parse_range(string):
@@ -85,7 +114,15 @@ class DiscreteDist(object):
     """Prior parameter that takes a number of discrete values."""
 
     def __init__(self, values):
-        self.values = np.asarray(values)
+        values = list(values)
+        # Vector-valued ensemble members (``par=[1,2],[3,4]``) must stay a list
+        # of lists: an object array keeps them from collapsing into one numeric
+        # matrix and tolerates ragged lengths.
+        if any(isinstance(v, (list, tuple)) for v in values):
+            self.values = np.empty(len(values), dtype=object)
+            self.values[:] = values
+        else:
+            self.values = np.asarray(values)
 
     def rvs(self, size):
         indices = np.random.randint(0, len(self.values), size)

@@ -30,12 +30,22 @@ from runme import sample as _sample
 # Parameter spec parsing (shared by single-sim and ensemble)
 # ---------------------------------------------------------------------------
 def _is_ensemble_spec(spec):
-    """True if the value spec denotes an ensemble dimension (list/range/dist)."""
-    return (',' in spec) or ('?' in spec) or (':' in spec)
+    """True if the value spec denotes an ensemble dimension (list/range/dist).
+
+    The ``,``/``?``/``:`` markers only count at bracket-depth 0, so a vector
+    value (``[1,2,3]``) is a single fixed override while a list of vectors
+    (``[1,2],[3,4]``) is an ensemble dimension.
+    """
+    from runme.dist import split_top_level
+    return any(len(split_top_level(spec, ch)) > 1 for ch in (',', '?', ':'))
 
 
 def _coerce(valstr):
-    """Coerce a single value string to int, float, or str (matching the old -p)."""
+    """Coerce a single value string to int, float, str, or list (a ``[...]``
+    vector), matching the value syntax written to the parameter files."""
+    if valstr.strip().startswith('[') and valstr.strip().endswith(']'):
+        from runme.dist import parse_val
+        return parse_val(valstr)
     try:
         value = float(valstr)
         if value % 1 == 0 and '.' not in valstr:
