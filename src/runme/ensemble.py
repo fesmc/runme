@@ -52,7 +52,11 @@ def parse_slurm_array_indices(a):
 # ---------------------------------------------------------------------------
 def _short(name, value):
     """Short string representation of a parameter/value for folder names."""
-    value = "%s" % (value,)
+    if isinstance(value, (list, tuple)):
+        # vector value: join elements with hyphens (val1-val2-val3)
+        value = "-".join("%s" % (v,) for v in value)
+    else:
+        value = "%s" % (value,)
     if "+" in value:
         value = value.replace('+', '')
     if "/" in value:

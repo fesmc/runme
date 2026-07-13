@@ -4,6 +4,7 @@ import os
 from collections import OrderedDict as odict
 
 from runme.cli import _is_ensemble_spec, _coerce, classify_params
+from runme.ensemble import _short, autofolder
 from runme.dist import split_top_level, parse_val
 from runme.params import (MultiParam, Param, XParams,
                           str_dataframe, read_dataframe)
@@ -62,6 +63,16 @@ def test_product_tolerates_ragged_vector_lengths():
     xp = MultiParam([Param.parse("g.par=[1,2],[3,4,5]")]).product()
     rows = [list(xp.pset_as_array(i)) for i in range(xp.size)]
     assert rows == [[[1, 2]], [[3, 4, 5]]]
+
+
+# --- auto-named run directories ---------------------------------------------
+def test_short_joins_vector_values_with_hyphens():
+    assert _short("ctl.years", [10, 20, 30]) == "yrs.10-20-30"
+    assert _short("smb.alb", [0.3, 0.4]) == "alb.0.3-0.4"
+
+
+def test_autofolder_mixes_scalar_and_vector_dims():
+    assert autofolder([("a", 2), ("ctl.years", [10, 20])]) == "a.2.yrs.10-20"
 
 
 # --- fixed-width table round-trip -------------------------------------------
