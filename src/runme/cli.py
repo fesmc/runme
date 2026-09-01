@@ -12,7 +12,10 @@ is "ensemble-shaped" when it contains a comma (list), a colon (range), or
 ``?`` (distribution) at bracket-depth 0; single-valued ``-p`` entries are fixed
 overrides applied to every run, and any ensemble-shaped entry triggers ensemble
 mode. A bracket literal (``a=[1,2,3]``) is a single fixed vector value, and a
-list of them (``a=[1,2],[3,4]``) is an ensemble dimension over vectors.
+list of them (``a=[1,2],[3,4]``) is an ensemble dimension over vectors. The
+``==`` form (``a==v1,v2,v3``) forces a fixed override with comma-separated
+items — a shell-friendly alternative to ``a=[v1,v2,v3]`` that avoids quoting
+the brackets.
 """
 import os
 import sys
@@ -57,6 +60,25 @@ def _coerce(valstr):
         return valstr
 
 
+def _coerce_fixed(valstr):
+    """Coerce the value of a ``key==spec`` (double-equals) override.
+
+    ``==`` means "fixed, never an ensemble": commas denote items of a fixed
+    vector (equivalent to wrapping ``spec`` in ``[..]``), so
+    ``ice_domain==NH,ANT`` yields ``["NH", "ANT"]`` without needing shell
+    quotes around brackets. A single value stays a scalar; an explicit
+    ``[..]`` literal is preserved.
+    """
+    from runme.dist import split_top_level, parse_val
+    stripped = valstr.strip()
+    if stripped.startswith('[') and stripped.endswith(']'):
+        return parse_val(stripped)
+    parts = split_top_level(stripped, ',')
+    if len(parts) > 1:
+        return [parse_val(p) for p in parts]
+    return _coerce(valstr)
+
+
 def load_overlay(par_path, info):
     """Read the ``-n`` parameter file as an overlay dict.
 
@@ -94,13 +116,18 @@ def classify_params(raw):
 
     Returns ``(ensemble_specs, fixed)`` where ``ensemble_specs`` is the list of
     raw ``key=spec`` strings denoting ensemble dimensions and ``fixed`` is an
-    ordered dict of single-valued overrides.
+    ordered dict of single-valued overrides. ``key==spec`` (double equals) is
+    always fixed, with commas treated as vector items — a bracket-free way to
+    pass values that would otherwise look ensemble-shaped.
     """
     ensemble_specs = []
     fixed = odict()
     for item in raw or []:
         key, spec = item.split('=', 1)
-        if _is_ensemble_spec(spec):
+        if spec.startswith('='):
+            # `key==spec`: fixed override, comma-list stays a vector.
+            fixed[key] = _coerce_fixed(spec[1:])
+        elif _is_ensemble_spec(spec):
             ensemble_specs.append(item)
         else:
             fixed[key] = _coerce(spec)
@@ -177,7 +204,8 @@ def build_parser(hpc_config, info):
                         help="Set parameters. A single value is a fixed override applied to every run; "
                              "a comma list (a=1,2,3), range (a=0:10:5), or distribution (a=U?0,1) defines "
                              "an ensemble dimension. A bracket literal (a=[1,2,3]) is a fixed vector value; "
-                             "a list of them (a=[1,2],[3,4]) is an ensemble over vectors.")
+                             "a list of them (a=[1,2],[3,4]) is an ensemble over vectors. Use `==` "
+                             "(a==v1,v2,v3) to force a fixed vector without needing to quote brackets.")
 
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument('-o', dest='rundir', metavar='RUNDIR/OUTDIR', type=str, required=True,

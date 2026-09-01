@@ -37,6 +37,31 @@ def test_classify_params_splits_vectors_and_ensembles():
     assert fixed == odict([("g.c", [9, 9])])
 
 
+# --- `==` forces a fixed override without needing bracket escapes -----------
+def test_double_equals_forces_fixed_string_vector():
+    specs, fixed = classify_params(["ctl.ice_domain==NH-32KM,ANT-32KM"])
+    assert specs == []
+    assert fixed == odict([("ctl.ice_domain", ["NH-32KM", "ANT-32KM"])])
+
+
+def test_double_equals_scalar_stays_scalar():
+    specs, fixed = classify_params(["a==5", "b==foo"])
+    assert specs == []
+    assert fixed == odict([("a", 5), ("b", "foo")])
+
+
+def test_double_equals_bracket_literal_still_a_list():
+    specs, fixed = classify_params(["a==[1,2,3]"])
+    assert specs == []
+    assert fixed == odict([("a", [1, 2, 3])])
+
+
+def test_double_equals_never_expands_range_or_dist():
+    specs, fixed = classify_params(["a==0:10:5", "b==U?0,1"])
+    assert specs == []
+    assert fixed == odict([("a", "0:10:5"), ("b", ["U?0", 1])])
+
+
 # --- low-level helpers -------------------------------------------------------
 def test_split_top_level_ignores_bracketed_commas():
     assert split_top_level("[1,2],[3,4]", ",") == ["[1,2]", "[3,4]"]
