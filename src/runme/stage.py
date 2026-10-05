@@ -17,6 +17,7 @@ import subprocess as subp
 from itertools import chain
 
 from runme import __version__
+from runme.config import par_defaults_paths
 from runme.filetype import PARAM_EXTENSIONS
 from runme.namelist import param_write_to_files
 from runme.params import str_dataframe
@@ -79,9 +80,11 @@ def stage_rundir(rundir, info, exe_path, exe_alias, par_path=None, params=None,
     for path in par_paths:
         par_paths_rundir.append(os.path.join(rundir, os.path.basename(path)))
 
-    # Apply command-line parameter overrides (-p key=val ...) in the rundir
+    # Apply command-line parameter overrides (-p key=val ...) in the rundir.
+    # Parameters declared only in the project's defaults files are inserted.
     if params:
-        param_write_to_files(params, par_paths_rundir, par_paths_rundir, grp_aliases)
+        param_write_to_files(params, par_paths_rundir, par_paths_rundir, grp_aliases,
+                             defaults_paths=par_defaults_paths(info))
 
     return par_paths_rundir
 

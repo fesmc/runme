@@ -121,6 +121,16 @@ def load():
     return hpc_config, queues_all, info
 
 
+def par_defaults_paths(info):
+    """The optional ``par_defaults`` entry of ``info.json`` as a list of paths.
+
+    These files declare every parameter the model reads, so a ``-p`` override
+    may add a parameter that the staged parameter files leave out.
+    """
+    paths = info.get("par_defaults") or []
+    return [paths] if isinstance(paths, str) else list(paths)
+
+
 def select_hpc_queues(queues_all, hpc):
     """Select the queue block for ``hpc`` from the full queues mapping.
 

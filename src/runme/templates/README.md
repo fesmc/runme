@@ -37,7 +37,9 @@ It resolves through the same fallback chain.
 ## Info
 
 `.runme/info.json` describes the model itself: executables, parameter file
-paths, exe and group aliases, file/link rules used by `runme stage`. It is
+paths, exe and group aliases, file/link rules used by `runme stage`, and
+optionally `par_defaults` (files declaring every parameter, so `-p` may add one
+the parameter file leaves out). It is
 project-local with no fallback chain because nothing about it is shared
 across projects.
 
