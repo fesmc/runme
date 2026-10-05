@@ -50,11 +50,13 @@ def config_init(argv):
         os.makedirs(_config.RUNME_DIR)
         print("Created {}/".format(_config.RUNME_DIR))
 
+    created = False
     for name in _config.INIT_TEMPLATES:
         target = os.path.join(_config.RUNME_DIR, name)
         if not os.path.isfile(target):
             shutil.copy(os.path.join(_config.PACKAGE_TEMPLATES, name), target)
             print("  [+]  copied {} from packaged template".format(target))
+            created = True
         else:
             print("  [ok] {} (already present)".format(target))
 
@@ -64,6 +66,7 @@ def config_init(argv):
             shutil.copy(_config.CONFIG_DEFAULT_PATH, _config.CONFIG_PATH)
             print("  [+]  created {} (copied from {})".format(
                 _config.CONFIG_PATH, _config.CONFIG_DEFAULT_PATH))
+            created = True
         else:
             print("  [x]  cannot seed {}: {} is missing".format(
                 _config.CONFIG_PATH, _config.CONFIG_DEFAULT_PATH))
@@ -71,18 +74,22 @@ def config_init(argv):
     else:
         print("  [ok] {} (already present; not overwritten)".format(_config.CONFIG_PATH))
 
-    print("")
-    print("Note: queues.json and the submit templates are provided by the")
-    print("packaged defaults; run `runme config queues` / `runme config submit`")
-    print("if you need local copies to customise.")
-    print("")
-    print("Next steps:")
-    print("  1. Edit {} (set 'hpc' and 'account' at minimum).".format(_config.CONFIG_PATH))
-    print("     See `runme queues --all` for clusters and `runme accounts`")
-    print("     for available accounts.")
-    print("  2. Edit {} to describe your model's executables and inputs."
-          .format(_config.INFO_PATH))
-    print("  3. Run `runme info` to verify everything resolves.")
+    # Only surface the setup guidance when something was just created (a
+    # template or config.toml) and so needs editing. On a refresh where
+    # everything already exists, the "Next steps" block is just noise.
+    if created:
+        print("")
+        print("Note: queues.json and the submit templates are provided by the")
+        print("packaged defaults; run `runme config queues` / `runme config submit`")
+        print("if you need local copies to customise.")
+        print("")
+        print("Next steps:")
+        print("  1. Edit {} (set 'hpc' and 'account' at minimum).".format(_config.CONFIG_PATH))
+        print("     See `runme queues --all` for clusters and `runme accounts`")
+        print("     for available accounts.")
+        print("  2. Edit {} to describe your model's executables and inputs."
+              .format(_config.INFO_PATH))
+        print("  3. Run `runme info` to verify everything resolves.")
     return 0
 
 
