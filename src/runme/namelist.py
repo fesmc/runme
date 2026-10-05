@@ -231,8 +231,12 @@ def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
     for path in defaults_paths:
         defaults.update(_load_params(path))
 
-    # Next, check to make sure desired parameters exist, and place new ones
-    new = param_check_all(params_mapped, pars_src, nml_src_paths, defaults, defaults_paths)
+    # Next, check to make sure desired parameters exist, convert each value to
+    # the type of its current value, and place the new ones
+    refs = param_check_all(params_mapped, pars_src, nml_src_paths, defaults, defaults_paths)
+    params_mapped = odict((key, param_coerce(val, refs[key])) for key, val in params_mapped.items())
+    new = odict((key, val) for key, val in params_mapped.items()
+                if not any(key in d for d in pars_src))
     inserts = param_assign_new(new, pars_src, nml_src_paths)
 
     # If everything was ok, loop over files and write new parameter values
@@ -267,26 +271,30 @@ def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=(
     :func:`group_renames`); a canonical group that the parameter files rename is
     rejected so the value cannot land in a group the model never reads.
 
-    Returns the parameters found only in the defaults, to be inserted.
+    Returns the current (reference) value of every parameter, from the
+    parameter files or else the defaults.
     """
     defaults = defaults or {}
 
-    # Extract set of keys from all files
-    all_keys = set(k for d in pars_src for k in d)
+    # Collect the current values from all files
+    all_values = odict()
+    for d in pars_src:
+        all_values.update(d)
 
     renames, renamed = group_renames(defaults, pars_src + [params])
 
     misnamed = []
     missing = []
-    new = odict()
-    for key, val in params.items():
+    refs = odict()
+    for key in params:
         group = _group(key)
+        canonical = "{}.{}".format(renames.get(group, group), _name(key))
         if group in renamed:
             misnamed.append(key)
-        elif key in all_keys:
-            continue
-        elif "{}.{}".format(renames.get(group, group), _name(key)) in defaults:
-            new[key] = val
+        elif key in all_values:
+            refs[key] = all_values[key]
+        elif canonical in defaults:
+            refs[key] = defaults[canonical]
         else:
             missing.append(key)
 
@@ -309,7 +317,34 @@ def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=(
                      "\n".join(list(par_paths) + list(defaults_paths)) + "\n\n")
         raise Exception(error_msg)
 
-    return new
+    return refs
+
+
+_TRUE = ('.true.', 'true', 't')
+_FALSE = ('.false.', 'false', 'f')
+
+
+def param_coerce(value, ref):
+    """Convert a ``-p`` value to the type of the parameter's current value
+    ``ref``: ``True``/``.true.``/``T`` (and the false forms) to a logical, an
+    integer to a real, and a number to a string. Vectors are converted item by
+    item. Anything else is returned unchanged.
+    """
+    if isinstance(value, list):
+        item_ref = (ref[0] if ref else None) if isinstance(ref, list) else ref
+        return [param_coerce(v, item_ref) for v in value]
+    if isinstance(value, bool):
+        return value
+    if isinstance(ref, bool) and isinstance(value, str):
+        if value.lower() in _TRUE:
+            return True
+        if value.lower() in _FALSE:
+            return False
+    elif isinstance(ref, float) and isinstance(value, int):
+        return float(value)
+    elif isinstance(ref, str) and isinstance(value, (int, float)):
+        return str(value)
+    return value
 
 
 def group_pointers(defaults):

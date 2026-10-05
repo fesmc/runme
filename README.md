@@ -153,6 +153,10 @@ defaults group (e.g. `nml_dyn = "dyn"`) acts as a pointer, so with
 `nml_dyn = "dyn_north"` in the parameter file, `-p dyn_north.x=1` is checked
 against `dyn.x`, while `-p dyn.x=1` is an error.
 
+A `-p` value takes the type of the parameter's current value (in the staged file,
+or else the defaults): `True`, `.true.` or `T` set a logical, an integer sets a
+real as `10.0`, and a number sets a string parameter as a quoted string.
+
 A value may be a vector, written as a bracket literal: `-p 'ctl.years=[10,20,30]'`
 sets a single array-valued parameter (serialized as `[10, 20, 30]` in TOML/`.jl`,
 space-separated in a namelist). Commas inside the brackets belong to the vector,

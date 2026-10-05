@@ -7,7 +7,7 @@ import pytest
 
 from runme.config import par_defaults_paths
 from runme.namelist import (Namelist, param_write_to_files, group_renames,
-                            param_insert)
+                            param_insert, param_coerce)
 
 
 DEFAULTS = """\
@@ -56,6 +56,10 @@ def _write(path, text):
 
 def _setup(tmp_path, par=PAR):
     return _write(tmp_path / "defaults.nml", DEFAULTS), _write(tmp_path / "par.nml", par)
+
+
+def _as_list(v):
+    return v if isinstance(v, list) else [v]
 
 
 def _blocks(path):
@@ -155,3 +159,42 @@ def test_par_defaults_paths():
     assert par_defaults_paths({}) == []
     assert par_defaults_paths({"par_defaults": "d.nml"}) == ["d.nml"]
     assert par_defaults_paths({"par_defaults": ["d.nml", "e.nml"]}) == ["d.nml", "e.nml"]
+
+
+# ---------------------------------------------------------------------------
+# Values take the type of the parameter's current value
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("raw,expected", [
+    ("True", True), (".true.", True), ("T", True), ("t", True),
+    ("False", False), (".false.", False), ("F", False),
+])
+def test_logical_values(tmp_path, raw, expected):
+    par = _write(tmp_path / "par.nml", "&g\n flag = .false.\n/\n")
+    param_write_to_files({"g.flag": raw}, [par], [par])
+    text = open(par).read()
+    assert (".true." if expected else ".false.") in text
+    assert "'" not in text
+    assert Namelist().load(open(par))["g.flag"] is expected
+
+
+def test_logical_value_inserted_from_defaults(tmp_path):
+    defaults = _write(tmp_path / "defaults.nml", "&g\n flag = .false.\n/\n")
+    par = _write(tmp_path / "par.nml", "&h\n x = 1\n/\n")
+    param_write_to_files({"g.flag": "T"}, [par], [par], defaults_paths=[defaults])
+    assert Namelist().load(open(par))["g.flag"] is True
+
+
+@pytest.mark.parametrize("value,ref,expected", [
+    (10, 1.0, 10.0),            # integer -> real
+    (16, "x", "16"),            # number -> string
+    (2.5, 1, 2.5),              # real stays real for an integer parameter
+    ("abc", 1.0, "abc"),        # unconvertible values pass through
+    ("yes", False, "yes"),
+    ([1, 2], [1.0], [1.0, 2.0]),  # vectors item by item
+    (["T", "F"], [False], [True, False]),
+    ([1, 2], 1.0, [1.0, 2.0]),  # scalar reference for a vector value
+])
+def test_param_coerce(value, ref, expected):
+    out = param_coerce(value, ref)
+    assert out == expected
+    assert [type(v) for v in _as_list(out)] == [type(v) for v in _as_list(expected)]
