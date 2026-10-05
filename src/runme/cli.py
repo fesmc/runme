@@ -238,6 +238,11 @@ def build_context(args, hpc_config, queues_all, info):
         exe_path = info["exe_aliases"].get(exe_path)
     exe_alias = next((k for k, v in info["exe_aliases"].items() if v == exe_path), None)
     print("exe_alias: {}".format(exe_alias))
+    skipped = _stage.exe_specific_par_keys(info) if exe_alias is None else []
+    if skipped:
+        print("Warning: exe '{}' matches no entry in exe_aliases, so par_paths for {} "
+              "will not be staged. Add it to exe_aliases, or list shared parameter "
+              "files under par_paths 'all'.".format(exe_path, ", ".join(skipped)))
 
     exe_fname = os.path.basename(exe_path)
     par_path = getattr(args, 'par_path', None)

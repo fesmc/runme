@@ -29,6 +29,11 @@ RECORD = "runme.json"
 GENERIC_PAR_KEYS = {"", "all", "none", "na", "general"}
 
 
+def exe_specific_par_keys(info):
+    """Return the ``par_paths`` keys that apply only to a named executable alias."""
+    return [k for k in info["par_paths"] if k not in GENERIC_PAR_KEYS]
+
+
 def stage_rundir(rundir, info, exe_path, exe_alias, par_path=None, params=None,
                  grp_aliases=None, create=True):
     """Populate ``rundir`` ready to run.
