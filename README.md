@@ -70,9 +70,12 @@ the input folders to link. It is the one genuinely project-specific file:
     "par_paths" : { "alias" : "None" },
     "files" : ["None"],
     "dir-special" : { "None" : "target_dir_name" },
-    "links" : ["input", "ice_data", "maps"]
+    "links" : ["input", "ice_data", "maps"],
+    "par_defaults" : []
 }
 ```
+
+`par_defaults` is optional; see [Running a single simulation](#running-a-single-simulation).
 
 Then create a local `.runme_config` with your per-host settings (the HPC name,
 account, email, OpenMP threads, and the paths to your info and queues files):
@@ -135,6 +138,20 @@ Parameters can be modified inline with `-p KEY=VALUE [KEY=VALUE ...]`; the chang
 are written to the parameter file copied into the run directory. A `-p` key must
 already exist in one of the parameter files being staged — runme will not create
 new parameters, so a typo'd name is reported rather than silently added.
+
+The exception is a model whose parameter files list only overrides of a full
+defaults file. Name that file in `info.json`:
+
+```json
+"par_defaults" : ["input/model_defaults.nml"]
+```
+
+and a `-p` key absent from the staged files is accepted if the defaults declare
+it, and inserted into its group (or a new group) in the copied parameter file.
+Group renames are followed: a defaults parameter whose value names another
+defaults group (e.g. `nml_dyn = "dyn"`) acts as a pointer, so with
+`nml_dyn = "dyn_north"` in the parameter file, `-p dyn_north.x=1` is checked
+against `dyn.x`, while `-p dyn.x=1` is an error.
 
 A value may be a vector, written as a bracket literal: `-p 'ctl.years=[10,20,30]'`
 sets a single array-valued parameter (serialized as `[10, 20, 30]` in TOML/`.jl`,

@@ -329,6 +329,19 @@ def config_check(argv):
     ok &= _config.check_json_file(
         _config.INFO_PATH, _config.REQUIRED_INFO_KEYS, "info")
 
+    # Optional par_defaults files must exist.
+    if os.path.isfile(_config.INFO_PATH):
+        try:
+            info_data = _config.load_json_strip_doc(_config.INFO_PATH)
+        except Exception:
+            info_data = {}
+        for path in _config.par_defaults_paths(info_data):
+            if os.path.isfile(path):
+                print("  [ok] par_defaults '{}'".format(path))
+            else:
+                print("  [x]  par_defaults '{}' not found".format(path))
+                ok = False
+
     # Cross-checks: 'hpc' set and present in queues, 'account' set.
     if os.path.isfile(_config.CONFIG_PATH):
         try:

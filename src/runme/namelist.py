@@ -208,10 +208,15 @@ def nml_update_if_exists(par, new):
     return par
 
 
-def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None):
+def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
+                         defaults_paths=None):
     """Write parameters from a dict to one or more destination parameter files,
     given the input parameter file(s), substituting group names by their aliases
     when necessary.
+
+    With ``defaults_paths`` (the project's ``par_defaults``), a parameter absent
+    from the parameter files but declared in the defaults is inserted into the
+    file holding its group.
     """
     # First expand input parameter group-name aliases if available
     if grp_aliases is not None and len(grp_aliases) > 0:
@@ -219,58 +224,164 @@ def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None)
     else:
         params_mapped = params
 
-    # Next, check to make sure desired parameters exist
-    param_check_all(params_mapped, nml_src_paths)
+    # Load the input parameter files and the defaults declaring all parameters
+    pars_src = [_load_params(path) for path in nml_src_paths]
+    defaults_paths = list(defaults_paths or [])
+    defaults = odict()
+    for path in defaults_paths:
+        defaults.update(_load_params(path))
+
+    # Next, check to make sure desired parameters exist, and place new ones
+    new = param_check_all(params_mapped, pars_src, nml_src_paths, defaults, defaults_paths)
+    inserts = param_assign_new(new, pars_src, nml_src_paths)
 
     # If everything was ok, loop over files and write new parameter values
-    for par_src_path, par_dst_path in zip(nml_src_paths, nml_dst_paths):
-        param_write_to_file(params_mapped, par_src_path, par_dst_path)
+    for params_now, params_new, par_dst_path in zip(pars_src, inserts, nml_dst_paths):
+        params_now = nml_update_if_exists(params_now, params_mapped)
+        params_now = param_insert(params_now, params_new)
+        with open(par_dst_path, 'w') as f:
+            filetype_for_path(par_dst_path).dump(params_now, f)
 
     return
 
 
-def param_check_all(params, par_paths):
+def _load_params(path):
+    """Load a parameter file in the format implied by its extension."""
+    with open(path) as f:
+        return filetype_for_path(path).load(f)
+
+
+def _group(key):
+    return key.partition('.')[0]
+
+
+def _name(key):
+    return key.rpartition('.')[2]
+
+
+def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=()):
     """Check whether all parameters defined in a dict exist in one or more input
-    namelist parameter files.
+    parameter files or, failing that, in the defaults.
+
+    Defaults are looked up under the canonical group name (see
+    :func:`group_renames`); a canonical group that the parameter files rename is
+    rejected so the value cannot land in a group the model never reads.
+
+    Returns the parameters found only in the defaults, to be inserted.
     """
-    # Get all possible parameters from input files
-    params_all = []
-    for path in par_paths:
-        params_all.append(filetype_for_path(path).load(open(path)))
+    defaults = defaults or {}
 
     # Extract set of keys from all files
-    all_keys = set(k for d in params_all for k in d)
+    all_keys = set(k for d in pars_src for k in d)
 
-    # Determine which keys do not exist in parameter file params
-    missing_keys = set(params) - set(all_keys)
+    renames, renamed = group_renames(defaults, pars_src + [params])
 
-    if len(missing_keys) > 0:
-        error_msg = ("\n\nError: one or more parameters not found in input parameter files.\n\n" +
-                     "Missing parameters: \n" +
-                     "  " + ",".join(missing_keys) + "\n\n" +
-                     "Parameter files checked: \n" +
-                     "\n".join(par_paths) + "\n\n")
+    misnamed = []
+    missing = []
+    new = odict()
+    for key, val in params.items():
+        group = _group(key)
+        if group in renamed:
+            misnamed.append(key)
+        elif key in all_keys:
+            continue
+        elif "{}.{}".format(renames.get(group, group), _name(key)) in defaults:
+            new[key] = val
+        else:
+            missing.append(key)
+
+    if len(misnamed) > 0:
+        lines = []
+        for key in misnamed:
+            group = _group(key)
+            names = sorted(n for n, g in renames.items() if g == group)
+            lines.append("  {} (group '{}' is renamed to: {})".format(key, group, ", ".join(names)))
+        error_msg = ("\n\nError: one or more parameters use a group renamed in the input "
+                     "parameter files; use the new group name.\n\n" +
+                     "\n".join(lines) + "\n\n")
         raise Exception(error_msg)
 
+    if len(missing) > 0:
+        error_msg = ("\n\nError: one or more parameters not found in input parameter files.\n\n" +
+                     "Missing parameters: \n" +
+                     "  " + ",".join(missing) + "\n\n" +
+                     "Parameter files checked: \n" +
+                     "\n".join(list(par_paths) + list(defaults_paths)) + "\n\n")
+        raise Exception(error_msg)
 
-def param_write_to_file(params, par_src_path, par_dst_path):
-    """Load parameters from a parameter file, update values according to the
-    dictionary provided, and then write the updated parameter file. The on-disk
-    format of each path is chosen from its extension, so source and destination
-    may even differ in format.
+    return new
+
+
+def group_pointers(defaults):
+    """Parameters in ``defaults`` whose value names another defaults group, as
+    ``{name: group}``; e.g. Yelmo's ``yelmo.nml_ydyn = "ydyn"`` gives
+    ``{"nml_ydyn": "ydyn"}``.
     """
-    # Load input parameters in the source file's format
-    params_now = filetype_for_path(par_src_path).load(open(par_src_path))
+    groups = set(_group(k) for k in defaults)
+    return {_name(key): val for key, val in defaults.items()
+            if isinstance(val, str) and val in groups and val != _group(key)}
 
-    # Update parameters with desired values (only update parameter values if the
-    # parameters are defined in this set)
-    params_now = nml_update_if_exists(params_now, params)
 
-    # Write updated parameter file to rundir in the destination's format
-    f = open(par_dst_path, 'w')
-    filetype_for_path(par_dst_path).dump(params_now, f)
+def group_renames(defaults, sources):
+    """Find the groups renamed through a group pointer (see
+    :func:`group_pointers`) set in ``sources``.
 
-    return
+    Returns ``(renames, renamed)``: ``renames`` maps each new group name to its
+    canonical defaults group (``nml_ydyn = "ydyn_north"`` gives
+    ``{"ydyn_north": "ydyn"}``), and ``renamed`` holds the canonical groups
+    used only under other names.
+    """
+    pointers = group_pointers(defaults)
+    used = {}  # canonical group -> names it is used under
+    for src in sources:
+        for key, val in src.items():
+            if _name(key) in pointers:
+                used.setdefault(pointers[_name(key)], set()).add(val)
+    renames = {name: group for group, names in used.items() for name in names if name != group}
+    renamed = set(group for group, names in used.items() if group not in names)
+    return renames, renamed
+
+
+def param_assign_new(new, pars_src, par_paths):
+    """Split new parameters by destination file: the file already holding the
+    parameter's group, or the only file when the group is new.
+    """
+    inserts = [odict() for _ in pars_src]
+    for key, val in new.items():
+        group = _group(key)
+        holders = [i for i, d in enumerate(pars_src) if any(_group(k) == group for k in d)]
+        if not holders and len(pars_src) == 1:
+            holders = [0]
+        if len(holders) != 1:
+            error_msg = ("\n\nError: cannot choose the parameter file to add {} to: ".format(key) +
+                         "group '{}' is in {} of the input parameter files.\n\n".format(group, len(holders)) +
+                         "Parameter files: \n" +
+                         "\n".join(par_paths) + "\n\n")
+            raise Exception(error_msg)
+        inserts[holders[0]][key] = val
+    return inserts
+
+
+def param_insert(params, new):
+    """Insert ``new`` parameters into ``params``, each after the last parameter
+    of its group, or in a new group appended at the end. Keeping a group's
+    parameters contiguous means it is written as a single namelist block.
+    """
+    new_by_group = odict()
+    for key, val in new.items():
+        new_by_group.setdefault(_group(key), odict())[key] = val
+
+    last = {_group(key): key for key in params}
+
+    out = odict()
+    for key, val in params.items():
+        out[key] = val
+        group = _group(key)
+        if last[group] == key and group in new_by_group:
+            out.update(new_by_group.pop(group))
+    for group_params in new_by_group.values():
+        out.update(group_params)
+    return out
 
 
 def param_map_groups(params, grp_aliases):
