@@ -177,6 +177,8 @@ def build_parser(hpc_config, info):
                         help='Email for job notifications (overrides config).')
     parser.add_argument('--account', type=str, default=hpc_config["account"],
                         help='HPC account (overrides config).')
+    parser.add_argument('--jobname', type=str, default=hpc_config["jobname"],
+                        help='Job name (overrides config).')
     parser.add_argument('-v', action="store_true", help='Verbose script output?')
     parser.add_argument('--debug', action="store_true",
                         help='Print a full traceback on error.')
@@ -306,7 +308,7 @@ def build_context(args, hpc_config, queues_all, info):
         dry_run=args.dry_run,
         qos=qos, partition=partition, wall=wall, mem=mem,
         account=args.account, omp=args.omp,
-        jobname=hpc_config["jobname"], email=args.email,
+        jobname=args.jobname, email=args.email,
         mail_type=hpc_config["mail_type"],
         template=template,
         command=" ".join(sys.argv),
