@@ -45,75 +45,131 @@ class Namelist(FileType):
 def parse_nml(string, ignore_comments=False):
     """Parse a string namelist, and return a list of param bundles
     with four attrs: name, value, help, group.
+
+    Quoted strings (``'...'`` or ``"..."``) are opaque: ``&``, ``/``, ``!``,
+    ``=`` and ``,`` inside them are never treated as syntax. Inline comments
+    become the parameter's help, unless ``ignore_comments`` is set.
     """
-    group_re = re.compile(r'&([^&]+)/', re.DOTALL)  # allow blocks to span multiple lines
-    # array_re = re.compile(r'(\w+)\((\d+)\)')
-    # string_re = re.compile(r"[\'\"]*[\'\"]")
-
-    # list of parameters
     params = []
-
-    filtered_lines = []
-    for line in string.split('\n'):
-        line = line.strip()
-        if line == "":
-            continue
-        # remove comments, since they may have forward-slashes
-        # set ignore_comments to True if you want to keep them.
-        if line.startswith('!'):
-            continue
-        if ignore_comments and '!' in line:
-            line = line[:line.index('!')]
-
-        filtered_lines.append(line)
-
-    group_blocks = re.findall(group_re, "\n".join(filtered_lines))
-
-    for i, group_block in enumerate(group_blocks):
-        group_lines = group_block.split('\n')
-        group_name = group_lines.pop(0).strip()
-        # check for comments
-        if "!" in group_name:
-            i = group_name.index("!")
-            group_name = group_name[:i].strip()
-
-        # some lines are continuation of previous lines: filter
-        joined_lines = []
-        for line in group_lines:
-            line = line.strip()
-            if '=' in line:
-                joined_lines.append(line)
-            elif line == '':
-                pass
-            else:
-                # continuation of previous line
-                joined_lines[-1] += line
-        group_lines = joined_lines
-
-        for line in group_lines:
-            name, value, comment = _parse_line(line)
-            param = ParamNml(group_name, name, value, help=comment)
-            params.append(param)
-
+    for group_name, lines in _nml_groups(string):
+        for code, comment in _join_continuations(lines):
+            name, value = _parse_assignment(code)
+            help = "" if ignore_comments else comment
+            params.append(ParamNml(group_name, name, value, help=help))
     return params
 
 
-def _parse_line(line):
-    "parse a line within a block"
+def _find_unquoted(s, chars, start=0):
+    """Index of the first character of ``s`` in ``chars`` outside quotes, or -1.
+
+    A doubled quote inside a string (Fortran's ``'it''s'``) closes and reopens
+    the string, so it needs no special handling.
+    """
+    quote = None
+    for i in range(start, len(s)):
+        c = s[i]
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c in chars:
+            return i
+    return -1
+
+
+def _split_unquoted(s, chars):
+    """Split ``s`` at characters in ``chars`` outside quotes (empty parts kept)."""
+    parts = []
+    i = _find_unquoted(s, chars)
+    while i >= 0:
+        parts.append(s[:i])
+        s = s[i + 1:]
+        i = _find_unquoted(s, chars)
+    parts.append(s)
+    return parts
+
+
+def _is_quoted(s):
+    """Whether ``s`` is exactly one quoted string."""
+    return len(s) >= 2 and s[0] in "'\"" and _closing_quote(s) == len(s) - 1
+
+
+def _closing_quote(s):
+    """Index of the quote closing the string that opens ``s``, skipping doubled quotes."""
+    q = s[0]
+    i = 1
+    while i < len(s):
+        if s[i] == q:
+            if i + 1 < len(s) and s[i + 1] == q:
+                i += 2
+                continue
+            return i
+        i += 1
+    return -1
+
+
+def _nml_groups(string):
+    """Split a namelist into ``(group name, [(code, comment), ...])`` blocks.
+
+    Comments (``!`` outside quotes) are split off each line first. Outside a
+    group, ``&name`` opens one; inside, ``/`` closes it. Text outside groups is
+    ignored.
+    """
+    groups = []
+    current = None
+    for raw in string.split('\n'):
+        i = _find_unquoted(raw, '!')
+        code, comment = (raw, "") if i < 0 else (raw[:i], raw[i + 1:].strip())
+        code = code.strip()
+        while code:
+            if current is None:
+                i = _find_unquoted(code, '&')
+                if i < 0:
+                    break
+                m = re.match(r'\s*([^\s/]+)', code[i + 1:])
+                if m is None:
+                    raise ValueError("Namelist group without a name: {}".format(raw))
+                current = (m.group(1), [])
+                code = code[i + 1 + m.end():].strip()
+            else:
+                i = _find_unquoted(code, '/')
+                body = code if i < 0 else code[:i].strip()
+                if body:
+                    current[1].append((body, comment))
+                    comment = ""
+                if i < 0:
+                    break
+                groups.append(current)
+                current = None
+                code = code[i + 1:].strip()
+    if current is not None:
+        raise ValueError("Namelist group '{}' is not closed with '/'".format(current[0]))
+    return groups
+
+
+def _join_continuations(lines):
+    """Join lines without an ``=`` (outside quotes) onto the previous assignment."""
+    joined = []
+    for code, comment in lines:
+        if _find_unquoted(code, '=') >= 0:
+            joined.append([code, comment])
+        elif joined:
+            joined[-1][0] += " " + code
+            joined[-1][1] = " ".join(c for c in (joined[-1][1], comment) if c)
+        else:
+            raise ValueError("Namelist value without a parameter name: {}".format(code))
+    return [tuple(j) for j in joined]
+
+
+def _parse_assignment(code):
+    """Parse ``name = value`` (comment already removed) into ``(name, value)``."""
+    i = _find_unquoted(code, '=')
+    value = code[i + 1:].strip()
     # commas at the end of lines seem to be optional
-    comment = ""
-    if '!' in line:
-        sep = line.index("!")
-        comment = line[sep + 1:].strip()
-        line = line[:sep].strip()
-
-    if line.endswith(','):
-        line = line[:-1]
-
-    k, v = line.split('=')
-    name = k.strip()
-    value = _parse_value(v.strip())
-    return name, value, comment
+    if value.endswith(','):
+        value = value[:-1].strip()
+    return code[:i].strip(), _parse_value(value)
 
 
 def _parse_value(variable_value):
@@ -128,25 +184,18 @@ def _parse_value(variable_value):
                 parsed_value = True
             elif variable_value.lower() in ['.false.', 'f', 'false']:
                 parsed_value = False
-            elif variable_value.startswith("'") \
-                    and variable_value.endswith("'") \
-                    and variable_value.count("'") == 2 \
-                    or variable_value.startswith('"') \
-                    and variable_value.endswith('"') \
-                    and variable_value.count('"') == 2:
-                parsed_value = variable_value[1:-1]
-            elif variable_value.startswith("/") and variable_value.endswith("/"):
-                # array /3,4,5/
-                parsed_value = _parse_array(variable_value[1:-1].split(','))
-            elif "," in variable_value:
+            elif _is_quoted(variable_value):
+                q = variable_value[0]
+                parsed_value = variable_value[1:-1].replace(q + q, q)
+            elif _find_unquoted(variable_value, ',') >= 0:
                 # array 3, 4, 5
-                parsed_value = _parse_array(variable_value.split(','))
-            elif '*' in variable_value:
+                parsed_value = _parse_array(_split_unquoted(variable_value, ','))
+            elif _find_unquoted(variable_value, '*') >= 0:
                 # 3*4 means [4, 4, 4, 4] ==> handled in _parse_array
                 parsed_value = _parse_array([variable_value])
-            elif len(variable_value.split()) > 1:
+            elif len([v for v in _split_unquoted(variable_value, ' \t') if v]) > 1:
                 # array 3 4 5
-                parsed_value = _parse_array(variable_value.split())
+                parsed_value = _parse_array([v for v in _split_unquoted(variable_value, ' \t') if v])
             else:
                 print("Parsing ERROR: >>>{}<<<".format(variable_value))
                 raise ValueError(variable_value)
@@ -160,9 +209,11 @@ def _parse_array(values):
     assert type(values) is list
     parsed_value = []
     for v in values:
-        if '*' in v:
+        v = v.strip()
+        i = _find_unquoted(v, '*')
+        if i >= 0:
             # 3* "a" === "a", "a", "a"
-            mult, val = v.split('*')
+            mult, val = v[:i], v[i + 1:]
             parsed_value.extend(int(mult) * [_parse_value(val.strip())])
         else:
             parsed_value.append(_parse_value(v))
