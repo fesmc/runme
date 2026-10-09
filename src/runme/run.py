@@ -31,8 +31,8 @@ def execute_one(rundir, params, ctx, create=True):
     # 2. Run / submit / stage-only.
     if ctx.submit:
         _hpc.preparejob(ctx.template, rundir, ctx.executable, ctx.qos, ctx.mem,
-                        ctx.wall, ctx.partition, ctx.account, ctx.omp,
-                        ctx.jobname, ctx.email, ctx.mail_type)
+                        ctx.wall, ctx.partition, ctx.account, ctx.omp, ctx.cpus,
+                        ctx.jobname, ctx.email, ctx.mail_type, ctx.sbatch)
         if ctx.run:
             _hpc.submitjob(rundir)
             status = "submitted"

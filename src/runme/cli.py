@@ -173,6 +173,12 @@ def build_parser(hpc_config, info):
                         help='HPC max memory per node (overrides queue alias)')
     parser.add_argument('--omp', type=int, metavar="OMP", default=hpc_config["omp"],
                         help='Number of OpenMP threads (default = 1 implies no parallel computation)')
+    parser.add_argument('--cpus', type=int, metavar="CPUS", default=None,
+                        help='CPUs per task to allocate when submitting (default = OMP); '
+                             'lets the thread count differ from the allocation.')
+    parser.add_argument('--sbatch', type=str, metavar="DIRECTIVE", action='append', default=[],
+                        help='Extra sbatch directive, written verbatim as "#SBATCH DIRECTIVE" '
+                             '(repeatable), e.g. --sbatch=--exclusive --sbatch=--mem=0.')
     parser.add_argument('--email', type=str, default=hpc_config["email"],
                         help='Email for job notifications (overrides config).')
     parser.add_argument('--account', type=str, default=hpc_config["account"],
@@ -276,6 +282,8 @@ def build_context(args, hpc_config, queues_all, info):
         qos, partition, wall, mem = _hpc.resolve_queue(
             hpc_queues, hpc_config, args.queue, args.qos, args.part, args.wall, args.mem)
         template = _config.resolve_file(hpc_queues["job_template"])
+        if args.cpus is not None and args.omp <= 0:
+            raise Exception("--cpus requires --omp > 0 (the OpenMP block sets --cpus-per-task).")
 
         print("")
         print("Resolved submit settings:")
@@ -287,6 +295,10 @@ def build_context(args, hpc_config, queues_all, info):
         print("  wall      = {}".format(wall))
         print("  mem       = {}".format(mem if mem not in (None, -1) else "(unset)"))
         print("  omp       = {}".format(args.omp))
+        if args.omp > 0:
+            print("  cpus      = {}".format(args.cpus if args.cpus is not None else args.omp))
+        for directive in args.sbatch:
+            print("  sbatch    = {}".format(directive))
         print("  template  = {}".format(template))
         print("")
 
@@ -307,7 +319,7 @@ def build_context(args, hpc_config, queues_all, info):
         submit=args.submit,
         dry_run=args.dry_run,
         qos=qos, partition=partition, wall=wall, mem=mem,
-        account=args.account, omp=args.omp,
+        account=args.account, omp=args.omp, cpus=args.cpus, sbatch=args.sbatch,
         jobname=args.jobname, email=args.email,
         mail_type=hpc_config["mail_type"],
         template=template,

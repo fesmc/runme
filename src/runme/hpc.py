@@ -70,12 +70,14 @@ def runjob(rundir, cmd, omp):
     return jobstatus
 
 
-def preparejob(path_template, rundir, cmd, qos, mem, wall, partition, account, omp, jobname, email, mail_type):
+def preparejob(path_template, rundir, cmd, qos, mem, wall, partition, account, omp, cpus,
+               jobname, email, mail_type, sbatch=()):
     """Prepare and write a job script for submitting a job to a HPC queue."""
     nm_jobscript = 'job.submit'
     path_jobscript = "{}/{}".format(rundir, nm_jobscript)
 
-    script = generate_jobscript(path_template, cmd, jobname, account, qos, mem, wall, partition, omp, email, mail_type)
+    script = generate_jobscript(path_template, cmd, jobname, account, qos, mem, wall, partition,
+                                omp, cpus, email, mail_type, sbatch)
     open(path_jobscript, 'w').write(script)
 
     return
@@ -97,12 +99,20 @@ def submitjob(rundir):
     return jobstatus
 
 
-def generate_jobscript(template, cmd, jobname, account, qos, mem, wall, partition, omp, email, mail_type):
-    """Build the job script from a template file, substituting ``< >`` fields."""
+def generate_jobscript(template, cmd, jobname, account, qos, mem, wall, partition, omp, cpus,
+                       email, mail_type, sbatch=()):
+    """Build the job script from a template file, substituting ``< >`` fields.
+
+    ``cpus`` (default ``omp``) fills ``<CPUS>`` (``--cpus-per-task``) in the OMP
+    fragment, independently of the thread count ``<OMP>``. Each ``sbatch``
+    directive is written as ``#SBATCH <directive>`` after the last ``#SBATCH``
+    line of the script.
+    """
     # If omp has been set, generate a jobscript string with appropriate settings
     if omp > 0:
         omp_script = open(template + "_omp", 'r').read()
         omp_script = omp_script.replace('<OMP>', "{}".format(omp))
+        omp_script = omp_script.replace('<CPUS>', "{}".format(omp if cpus is None else cpus))
     else:
         omp_script = ""
 
@@ -131,5 +141,11 @@ def generate_jobscript(template, cmd, jobname, account, qos, mem, wall, partitio
         job_script = job_script.replace('#SBATCH --mem=<MEM>', "")
     else:
         job_script = job_script.replace('<MEM>', "{}".format(mem))
+
+    if sbatch:
+        lines = job_script.split('\n')
+        last = max(i for i, line in enumerate(lines) if line.startswith('#SBATCH'))
+        lines[last + 1:last + 1] = ["#SBATCH {}".format(d) for d in sbatch]
+        job_script = '\n'.join(lines)
 
     return job_script

@@ -2,17 +2,16 @@
 
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
-#SBATCH --cpus-per-task=<OMP>
+#SBATCH --cpus-per-task=<CPUS>
 #SBATCH --no-requeue
 
 export OMP_PROC_BIND=true           # make sure our threads stick to cores
-export OMP_NUM_THREADS=<OMP>        # matches how many cpus-per-task we asked for
+export OMP_NUM_THREADS=<OMP>        # threads (--omp); may be fewer than cpus-per-task (--cpus)
 export OMP_MAX_ACTIVE_LEVELS=1
 export OMP_STACKSIZE=512M
 export MKL_NUM_THREADS=<OMP>
 
-# OpenMP and srun, both need to know the number of CPUs per task
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+# srun needs to know the number of CPUs per task
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 ## for HPC2024, other options
