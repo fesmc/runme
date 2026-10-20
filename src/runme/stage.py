@@ -71,8 +71,11 @@ def stage_rundir(rundir, info, exe_path, exe_alias, par_path=None, params=None,
         for k, v in info["par_paths"].items() if k in allowed_keys
     ))
 
+    # The -n file, read by the executable, receives groups no staged file holds
+    new_group_path = None
     if info["par_path_as_argument"] is True and par_path is not None:
         par_paths.append(par_path)  # included parameter file provided at command line
+        new_group_path = os.path.join(rundir, os.path.basename(par_path))
 
     # Eliminate empty entries
     par_paths = [entry for entry in par_paths if entry and entry != "None"]
@@ -91,7 +94,8 @@ def stage_rundir(rundir, info, exe_path, exe_alias, par_path=None, params=None,
     if params:
         param_write_to_files(params, par_paths_rundir, par_paths_rundir, grp_aliases,
                              defaults_paths=par_defaults_paths(info),
-                             library_paths=par_library_paths(info))
+                             library_paths=par_library_paths(info),
+                             new_group_path=new_group_path)
 
     return par_paths_rundir
 

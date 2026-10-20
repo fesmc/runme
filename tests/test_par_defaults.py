@@ -149,6 +149,18 @@ def test_new_group_with_several_files_is_ambiguous(tmp_path):
         param_write_to_files({"ytopo.dt_min": 1.0}, [a, b], [a, b], defaults_paths=[defaults])
 
 
+def test_new_group_goes_into_new_group_path(tmp_path):
+    defaults = _write(tmp_path / "defaults.nml", DEFAULTS)
+    a = _write(tmp_path / "a.nml", "&ctrl\n time_end = 0.0\n/\n")
+    b = _write(tmp_path / "b.nml", "&ydyn\n solver = 'ssa'\n/\n")
+    param_write_to_files({"ytopo.dt_min": 1.0, "ydyn.ssa_iter_max": 5}, [a, b], [a, b],
+                         defaults_paths=[defaults], new_group_path=a)
+    assert Namelist().load(open(a))["ytopo.dt_min"] == 1.0
+    assert "ydyn.ssa_iter_max" not in Namelist().load(open(a))
+    assert Namelist().load(open(b))["ydyn.ssa_iter_max"] == 5
+    assert "ytopo.dt_min" not in Namelist().load(open(b))
+
+
 def test_param_insert_keeps_groups_contiguous():
     params = odict([("a.x", 1), ("b.y", 2), ("a.z", 3)])
     out = param_insert(params, odict([("a.w", 4), ("c.v", 5)]))
