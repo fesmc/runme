@@ -260,14 +260,18 @@ def nml_update_if_exists(par, new):
 
 
 def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
-                         defaults_paths=None):
+                         defaults_paths=None, library_paths=None):
     """Write parameters from a dict to one or more destination parameter files,
     given the input parameter file(s), substituting group names by their aliases
     when necessary.
 
+    With ``library_paths`` (the project's ``par_library``), a parameter whose
+    group is absent from the parameter files but held by a library file brings
+    the whole group (all its parameters) into the parameter file.
+
     With ``defaults_paths`` (the project's ``par_defaults``), a parameter absent
-    from the parameter files but declared in the defaults is inserted into the
-    file holding its group.
+    from the parameter files and the library but declared in the defaults is
+    inserted into the file holding its group.
     """
     # First expand input parameter group-name aliases if available
     if grp_aliases is not None and len(grp_aliases) > 0:
@@ -275,20 +279,28 @@ def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
     else:
         params_mapped = params
 
-    # Load the input parameter files and the defaults declaring all parameters
+    # Load the input parameter files, the library groups they lack and the
+    # defaults declaring all parameters
     pars_src = [_load_params(path) for path in nml_src_paths]
+    library_paths = list(library_paths or [])
+    library, origins = param_library_groups(params_mapped, pars_src, library_paths)
     defaults_paths = list(defaults_paths or [])
     defaults = odict()
     for path in defaults_paths:
         defaults.update(_load_params(path))
 
     # Next, check to make sure desired parameters exist, convert each value to
-    # the type of its current value, and place the new ones
-    refs = param_check_all(params_mapped, pars_src, nml_src_paths, defaults, defaults_paths)
+    # the type of its current value, and place the new ones (whole library
+    # groups first, then single parameters from the defaults)
+    refs = param_check_all(params_mapped, pars_src, nml_src_paths, defaults, defaults_paths,
+                           library, library_paths)
     params_mapped = odict((key, param_coerce(val, refs[key])) for key, val in params_mapped.items())
-    new = odict((key, val) for key, val in params_mapped.items()
-                if not any(key in d for d in pars_src))
+    new = odict(library)
+    new.update((key, val) for key, val in params_mapped.items()
+               if not any(key in d for d in pars_src))
     inserts = param_assign_new(new, pars_src, nml_src_paths)
+    for group, path in origins.items():
+        print("Copied group &{} from {}".format(group, path))
 
     # If everything was ok, loop over files and write new parameter values
     for params_now, params_new, par_dst_path in zip(pars_src, inserts, nml_dst_paths):
@@ -314,25 +326,54 @@ def _name(key):
     return key.rpartition('.')[2]
 
 
-def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=()):
+def param_library_groups(params, pars_src, library_paths):
+    """Find the groups of ``params`` that no parameter file holds but a library
+    file does (the first one holding it, in list order).
+
+    Returns ``(library, origins)``: ``library`` holds every parameter of those
+    groups, in file order, and ``origins`` maps each group to its library file.
+    """
+    held = set(_group(key) for d in pars_src for key in d)
+    wanted = [g for g in odict.fromkeys(_group(key) for key in params) if g not in held]
+    library = odict()
+    origins = odict()
+    for path in library_paths:
+        if not wanted:
+            break
+        lib = _load_params(path)
+        for group in [g for g in wanted if any(_group(key) == g for key in lib)]:
+            library.update((key, val) for key, val in lib.items() if _group(key) == group)
+            origins[group] = path
+            wanted.remove(group)
+    return library, origins
+
+
+def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=(),
+                    library=None, library_paths=()):
     """Check whether all parameters defined in a dict exist in one or more input
-    parameter files or, failing that, in the defaults.
+    parameter files, else in the library groups copied for them, or, failing
+    that, in the defaults.
 
     Defaults are looked up under the canonical group name (see
     :func:`group_renames`); a canonical group that the parameter files rename is
     rejected so the value cannot land in a group the model never reads.
 
+    A parameter of a library group must be in that group: the defaults are
+    not consulted for it.
+
     Returns the current (reference) value of every parameter, from the
-    parameter files or else the defaults.
+    parameter files, the library groups or else the defaults.
     """
     defaults = defaults or {}
+    library = library or {}
+    library_groups = set(_group(key) for key in library)
 
     # Collect the current values from all files
     all_values = odict()
     for d in pars_src:
         all_values.update(d)
 
-    renames, renamed = group_renames(defaults, pars_src + [params])
+    renames, renamed = group_renames(defaults, pars_src + [library, params])
 
     misnamed = []
     missing = []
@@ -344,6 +385,11 @@ def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=(
             misnamed.append(key)
         elif key in all_values:
             refs[key] = all_values[key]
+        elif group in library_groups:
+            if key in library:
+                refs[key] = library[key]
+            else:
+                missing.append(key)
         elif canonical in defaults:
             refs[key] = defaults[canonical]
         else:
@@ -365,7 +411,8 @@ def param_check_all(params, pars_src, par_paths, defaults=None, defaults_paths=(
                      "Missing parameters: \n" +
                      "  " + ",".join(missing) + "\n\n" +
                      "Parameter files checked: \n" +
-                     "\n".join(list(par_paths) + list(defaults_paths)) + "\n\n")
+                     "\n".join(list(par_paths) + list(library_paths) + list(defaults_paths)) +
+                     "\n\n")
         raise Exception(error_msg)
 
     return refs

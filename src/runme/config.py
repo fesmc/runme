@@ -127,7 +127,22 @@ def par_defaults_paths(info):
     These files declare every parameter the model reads, so a ``-p`` override
     may add a parameter that the staged parameter files leave out.
     """
-    paths = info.get("par_defaults") or []
+    return _info_paths(info, "par_defaults")
+
+
+def par_library_paths(info):
+    """The optional ``par_library`` entry of ``info.json`` as a list of paths.
+
+    These files hold complete namelist groups; a ``-p`` override of a group the
+    staged parameter files lack copies the whole group from the first of them
+    holding it.
+    """
+    return _info_paths(info, "par_library")
+
+
+def _info_paths(info, key):
+    """An optional ``info.json`` entry given as one path or a list of paths."""
+    paths = info.get(key) or []
     return [paths] if isinstance(paths, str) else list(paths)
 
 
