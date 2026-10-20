@@ -10,6 +10,7 @@ from runme import ensemble as _ensemble
 from runme.config import par_library_paths
 from runme.namelist import Namelist, param_write_to_files
 from runme.params import MultiParam, Param
+from runme.stage import stage_rundir
 
 
 LIBRARY = """\
@@ -165,6 +166,43 @@ def test_ensemble_members_each_get_group(tmp_path, monkeypatch):
         assert result["idx_a.f_min"] == f_min
         assert result["idx_a.f_max"] == 1.0
         assert result["ctrl.time_end"] == 10.0
+
+
+def _stage(tmp_path, par_paths, par_path=None, params=None):
+    _write(tmp_path / "lib.nml", LIBRARY)
+    _write(tmp_path / "model.x", "")
+    info = {"par_paths": {"": par_paths}, "par_path_as_argument": par_path is not None,
+            "files": [], "dir-special": {}, "links": [], "par_library": ["lib.nml"]}
+    return stage_rundir("run", info, "model.x", None, par_path=par_path, params=params)
+
+
+def test_new_group_goes_into_n_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path / "base.nml", "&ctrl\n time_end = 0.0\n/\n")
+    _write(tmp_path / "case.nml", "&yelmo\n domain = 'GRL'\n/\n")
+    _stage(tmp_path, "base.nml", par_path="case.nml",
+           params={"snap_lgm.dT": -4.0, "ctrl.time_end": 10.0})
+    base = _load(os.path.join("run", "base.nml"))
+    case = _load(os.path.join("run", "case.nml"))
+    assert case["snap_lgm.dT"] == -4.0
+    assert _blocks(os.path.join("run", "case.nml")) == ["&yelmo", "&snap_lgm"]
+    assert not any(k.startswith("snap_lgm.") for k in base)
+    assert base["ctrl.time_end"] == 10.0
+
+
+def test_new_group_without_n_file_is_ambiguous(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path / "base.nml", "&ctrl\n time_end = 0.0\n/\n")
+    _write(tmp_path / "case.nml", "&yelmo\n domain = 'GRL'\n/\n")
+    with pytest.raises(Exception, match="cannot choose"):
+        _stage(tmp_path, ["base.nml", "case.nml"], params={"snap_lgm.dT": -4.0})
+
+
+def test_new_group_single_file_staged(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path / "par.nml", "&ctrl\n time_end = 0.0\n/\n")
+    _stage(tmp_path, "par.nml", params={"snap_lgm.dT": -4.0})
+    assert _load(os.path.join("run", "par.nml"))["snap_lgm.dT"] == -4.0
 
 
 def test_par_library_paths():

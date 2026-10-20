@@ -165,7 +165,8 @@ and a `-p` key whose group is in none of the staged files but is in a library
 file (the first one holding it) copies the whole group, all its parameters,
 into the parameter file before the override is applied, so the staged group is
 complete. The key must exist in that group. Library groups are looked up after
-the staged files and before `par_defaults`.
+the staged files and before `par_defaults`. With several staged files, a new
+group (from the library or `par_defaults`) goes into the `-n` file.
 
 A `-p` value takes the type of the parameter's current value (in the staged file,
 or else the defaults): `True`, `.true.` or `T` set a logical, an integer sets a

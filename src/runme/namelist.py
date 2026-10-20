@@ -260,7 +260,7 @@ def nml_update_if_exists(par, new):
 
 
 def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
-                         defaults_paths=None, library_paths=None):
+                         defaults_paths=None, library_paths=None, new_group_path=None):
     """Write parameters from a dict to one or more destination parameter files,
     given the input parameter file(s), substituting group names by their aliases
     when necessary.
@@ -272,6 +272,9 @@ def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
     With ``defaults_paths`` (the project's ``par_defaults``), a parameter absent
     from the parameter files and the library but declared in the defaults is
     inserted into the file holding its group.
+
+    A group held by none of the parameter files goes into ``new_group_path``
+    (one of ``nml_src_paths``) when given, else into the only parameter file.
     """
     # First expand input parameter group-name aliases if available
     if grp_aliases is not None and len(grp_aliases) > 0:
@@ -298,7 +301,7 @@ def param_write_to_files(params, nml_src_paths, nml_dst_paths, grp_aliases=None,
     new = odict(library)
     new.update((key, val) for key, val in params_mapped.items()
                if not any(key in d for d in pars_src))
-    inserts = param_assign_new(new, pars_src, nml_src_paths)
+    inserts = param_assign_new(new, pars_src, nml_src_paths, new_group_path)
     for group, path in origins.items():
         print("Copied group &{} from {}".format(group, path))
 
@@ -475,15 +478,18 @@ def group_renames(defaults, sources):
     return renames, renamed
 
 
-def param_assign_new(new, pars_src, par_paths):
+def param_assign_new(new, pars_src, par_paths, new_group_path=None):
     """Split new parameters by destination file: the file already holding the
-    parameter's group, or the only file when the group is new.
+    parameter's group, or, when the group is new, ``new_group_path`` if given,
+    else the only file.
     """
     inserts = [odict() for _ in pars_src]
     for key, val in new.items():
         group = _group(key)
         holders = [i for i, d in enumerate(pars_src) if any(_group(k) == group for k in d)]
-        if not holders and len(pars_src) == 1:
+        if not holders and new_group_path is not None:
+            holders = [list(par_paths).index(new_group_path)]
+        elif not holders and len(pars_src) == 1:
             holders = [0]
         if len(holders) != 1:
             error_msg = ("\n\nError: cannot choose the parameter file to add {} to: ".format(key) +
