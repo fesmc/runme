@@ -336,18 +336,20 @@ def config_check(argv):
     ok &= _config.check_json_file(
         _config.INFO_PATH, _config.REQUIRED_INFO_KEYS, "info")
 
-    # Optional par_defaults files must exist.
+    # Optional par_defaults and par_library files must exist.
     if os.path.isfile(_config.INFO_PATH):
         try:
             info_data = _config.load_json_strip_doc(_config.INFO_PATH)
         except Exception:
             info_data = {}
-        for path in _config.par_defaults_paths(info_data):
-            if os.path.isfile(path):
-                print("  [ok] par_defaults '{}'".format(path))
-            else:
-                print("  [x]  par_defaults '{}' not found".format(path))
-                ok = False
+        for key, paths in (("par_defaults", _config.par_defaults_paths(info_data)),
+                           ("par_library", _config.par_library_paths(info_data))):
+            for path in paths:
+                if os.path.isfile(path):
+                    print("  [ok] {} '{}'".format(key, path))
+                else:
+                    print("  [x]  {} '{}' not found".format(key, path))
+                    ok = False
 
     # Cross-checks: 'hpc' set and present in queues, 'account' set.
     if os.path.isfile(_config.CONFIG_PATH):
@@ -398,7 +400,8 @@ def info(argv):
                     "~/.config/runme/ -> packaged.")
     _print_resolved(_config.INFO_PATH, "project info",
                     "Model-specific: executables, par paths, links, files, "
-                    "exe/group aliases. Project-local.")
+                    "exe/group aliases. Project-local. Optional par_library "
+                    "files hold whole groups that -p copies into the par file.")
     _print_resolved(os.path.join(_config.RUNME_DIR, "submit_slurm"),
                     "submit template",
                     "SLURM job script template. Substitutes <QOS>, <PARTITION>, "

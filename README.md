@@ -71,11 +71,12 @@ the input folders to link. It is the one genuinely project-specific file:
     "files" : ["None"],
     "dir-special" : { "None" : "target_dir_name" },
     "links" : ["input", "ice_data", "maps"],
-    "par_defaults" : []
+    "par_defaults" : [],
+    "par_library" : []
 }
 ```
 
-`par_defaults` is optional; see [Running a single simulation](#running-a-single-simulation).
+`par_defaults` and `par_library` are optional; see [Running a single simulation](#running-a-single-simulation).
 
 Then create a local `.runme_config` with your per-host settings (the HPC name,
 account, email, OpenMP threads, and the paths to your info and queues files):
@@ -152,6 +153,19 @@ Group renames are followed: a defaults parameter whose value names another
 defaults group (e.g. `nml_dyn = "dyn"`) acts as a pointer, so with
 `nml_dyn = "dyn_north"` in the parameter file, `-p dyn_north.x=1` is checked
 against `dyn.x`, while `-p dyn.x=1` is an error.
+
+A model may also read some namelist groups from a shared library file when the
+parameter file lacks them. Name such files in `info.json`:
+
+```json
+"par_library" : ["input/forcing_db.nml"]
+```
+
+and a `-p` key whose group is in none of the staged files but is in a library
+file (the first one holding it) copies the whole group, all its parameters,
+into the parameter file before the override is applied, so the staged group is
+complete. The key must exist in that group. Library groups are looked up after
+the staged files and before `par_defaults`.
 
 A `-p` value takes the type of the parameter's current value (in the staged file,
 or else the defaults): `True`, `.true.` or `T` set a logical, an integer sets a
