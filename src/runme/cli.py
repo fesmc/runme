@@ -205,6 +205,10 @@ def build_parser(hpc_config, info):
                      help='Name run directories from parameter values instead of run id.')
     grp.add_argument('--include-default', dest='include_default', action='store_true',
                      help='Also run a "default" member with fixed parameters only.')
+    grp.add_argument('--array', dest='array', nargs='?', const=0, type=int, default=None, metavar='N',
+                     help='With -s: submit the ensemble as one Slurm job array (one task per member, '
+                          'array index = run id), at most N tasks at a time (default: no limit). '
+                          'Writes OUTDIR/array.submit, array.dirs and array.json (the job id).')
     grp.add_argument('--dry-run', dest='dry_run', action='store_true',
                      help='Show what would be done without creating or running anything.')
 
@@ -323,6 +327,7 @@ def build_context(args, hpc_config, queues_all, info):
         jobname=args.jobname, email=args.email,
         mail_type=hpc_config["mail_type"],
         template=template,
+        array=getattr(args, 'array', None),
         command=" ".join(sys.argv),
     )
 
@@ -505,6 +510,15 @@ def _main(argv):
     fixed = merge_overlay(overlay, fixed, info["grp_aliases"])
 
     is_ensemble = bool(args.params_file) or bool(ensemble_specs)
+    if args.array is not None:
+        if not is_ensemble:
+            parser.error("--array needs an ensemble (-i, or an ensemble -p dimension)")
+        if not args.submit:
+            parser.error("--array needs -s (and -r to submit)")
+        if args.gen_maps:
+            parser.error("--array does not apply to --gen-maps (a single run)")
+        if args.array < 0:
+            parser.error("--array N: N >= 0 (0: no limit)")
 
     # Build the ensemble parameter matrix up front (shared by the --gen-maps
     # short-circuit and the real ensemble run below).
