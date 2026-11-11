@@ -18,10 +18,13 @@ the members actually processed (honouring the ``-j`` selection). The
 is not part of the aggregate tables.
 """
 import os
+import copy
+import json
 from collections import OrderedDict as odict
 
 from runme import run as _run
 from runme import stage as _stage
+from runme import hpc as _hpc
 from runme.params import str_dataframe
 
 
@@ -123,6 +126,15 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
     if indices is None:
         indices = list(range(xparams.size))
 
+    # A job array: every member is prepared (its own job.submit, for resubmitting
+    # it alone), then one array job runs them all.
+    array = getattr(ctx, "array", None)
+    member_ctx = ctx
+    if array is not None:
+        member_ctx = copy.copy(ctx)
+        member_ctx.run = False
+    array_rows = []
+
     info_rows_all = []
     info_rows_ens = []
 
@@ -132,7 +144,8 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
         member_params.update(fixed)
 
         rundir = _member_rundir(expdir, i, ens_names, ens_row, autodir)
-        _run.execute_one(rundir, member_params, ctx, create=True)
+        _run.execute_one(rundir, member_params, member_ctx, create=True)
+        array_rows.append((i, rundir))
 
         if not ctx.dry_run:
             all_row = ens_row + fixed_vals
@@ -144,7 +157,8 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
     # Optional default member: fixed params only, staged under "default".
     if include_default:
         rundir = os.path.join(expdir, "default")
-        _run.execute_one(rundir, odict(fixed), ctx, create=True)
+        _run.execute_one(rundir, odict(fixed), member_ctx, create=True)
+        array_rows.append((xparams.size, rundir))   # array index of the default member: one past the last
         if not ctx.dry_run:
             _stage.write_run_tables(rundir, fixed_names, fixed_vals, runid="default")
 
@@ -155,4 +169,35 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
         _write_table(os.path.join(expdir, "info_ensemble.txt"),
                      ["runid"] + ens_names + ["rundir"], info_rows_ens)
 
+    if array is not None and not ctx.dry_run:
+        submit_array(ctx, expdir, array_rows, array)
+
     return
+
+
+def submit_array(ctx, expdir, rows, limit):
+    """Write ``array.submit`` / ``array.dirs`` in ``expdir`` for the prepared
+    members ``rows`` (array index, run directory) and, with ``ctx.run``, submit
+    it; the job id goes to ``array.json`` and each member's ``runme.json``."""
+    expdir_abs = os.path.abspath(expdir)
+    per_runid = all(os.path.abspath(d) == os.path.join(expdir_abs, str(i)) for i, d in rows)
+    with open(os.path.join(expdir, "array.dirs"), "w") as f:
+        for i, d in rows:
+            f.write("{} {}\n".format(i, os.path.abspath(d)))
+    member_script = _hpc.generate_jobscript(
+        ctx.template, ctx.executable, ctx.jobname, ctx.account, ctx.qos, ctx.mem, ctx.wall,
+        ctx.partition, ctx.omp, ctx.cpus, ctx.email, ctx.mail_type, ctx.sbatch)
+    script = _hpc.generate_array_jobscript(member_script, [i for i, _ in rows], limit, per_runid)
+    with open(os.path.join(expdir, "array.submit"), "w") as f:
+        f.write(script)
+    record = {"ids": _hpc.compress_indices([i for i, _ in rows]), "limit": limit,
+              "status": "prepared", "job_id": None}
+    if ctx.run:
+        out = _hpc.submitjob(expdir, "array.submit")
+        job_id = out.split()[-1] if out else None
+        record.update(status="submitted", job_id=job_id)
+        for i, d in rows:
+            _stage.update_record(d, status="submitted", array_job="{}_{}".format(job_id, i))
+    with open(os.path.join(expdir, "array.json"), "w") as f:
+        json.dump(record, f, indent=2)
+    return record

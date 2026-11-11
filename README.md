@@ -304,6 +304,39 @@ runme -r -o OUTDIR -n par/model.nml -p ctl.n_accel=1,5,10 -j 0,2     # members 0
 runme -r -o OUTDIR -n par/model.nml -i lhs.txt -j 0-9               # first ten members
 ```
 
+### Submitting an ensemble as one job array
+
+With `-s`, each member is normally submitted as its own job. Add `--array` to
+submit the ensemble as one Slurm job array instead, optionally at most `N` tasks
+at a time:
+
+```bash
+runme -r -s -q shared -o OUTDIR -n par/model.nml -i lhs.txt --array 25   # at most 25 running at once
+```
+
+Every member is still prepared with its own `job.submit` (to resubmit one alone).
+In `OUTDIR`, runme writes:
+
+- `array.submit` -- the member job script as an array: task `i` changes to the
+  run directory of run id `i` and runs the model there;
+- `array.dirs` -- the array index and run directory of each member;
+- `array.json` -- the array indices, the limit, the status and the job id.
+
+Each member's `runme.json` gets `array_job` (`<job id>_<run id>`). Without `-r`
+nothing is submitted (`sbatch array.submit` in `OUTDIR` submits it later). The
+array indices are the run ids, so `-j` selections carry over; with
+`--include-default` the default member is the index one past the last member.
+Member output goes to each run directory's `out.out` / `out.err`. With `-a`
+(directories named by values) Slurm's own messages go to
+`OUTDIR/array-<job>_<task>.out`.
+
+A job that should start after the whole ensemble can wait on the array id:
+
+```bash
+jid=$(python3 -c 'import json; print(json.load(open("OUTDIR/array.json"))["job_id"])')
+sbatch -d afterany:$jid analysis.sh
+```
+
 ### Generating ensembles
 
 For complex ensembles, a two-step approach is often clearer: generate the

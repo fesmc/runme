@@ -123,6 +123,17 @@ def write_record(rundir, params, command, exe_command, status):
     return record
 
 
+def update_record(rundir, **fields):
+    """Update fields of the ``runme.json`` record of ``rundir`` (e.g. status)."""
+    path = os.path.join(rundir, RECORD)
+    with open(path) as f:
+        record = json.load(f)
+    record.update(fields)
+    with open(path, 'w') as f:
+        json.dump(record, f, indent=2)
+    return record
+
+
 def write_run_tables(rundir, names, values, runid=0):
     """Write the single-row ``params.txt`` / ``info.txt`` text tables into a run
     directory, so every rundir (single-sim or ensemble member) is loadable the
