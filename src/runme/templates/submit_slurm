@@ -20,5 +20,7 @@ ulimit -v unlimited
 #ulimit -f unlimited
 ulimit -a
 
-# Run the job
-srun <CMD> 
+# Run the job: the CPUs per task given to srun explicitly, since Slurm may raise SLURM_CPUS_PER_TASK above the
+# requested --cpus-per-task (e.g. for --mem on a shared partition), and srun refuses to start when it differs
+# from SLURM_TRES_PER_TASK
+srun --cpus-per-task=${SLURM_CPUS_PER_TASK:-1} <CMD>
