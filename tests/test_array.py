@@ -33,7 +33,7 @@ def test_array_script_per_runid():
     icd = next(i for i, l in enumerate(lines) if l.startswith("cd "))
     assert all(not l.startswith("#SBATCH") for l in lines[icd:])
     assert lines.index("#SBATCH --array=0-2,4%2") < icd
-    assert "srun ./exe par.nml" in s
+    assert "srun --cpus-per-task=${SLURM_CPUS_PER_TASK:-1} ./exe par.nml" in s
 
 
 def test_array_script_named_dirs():
