@@ -28,24 +28,25 @@ def execute_one(rundir, params, ctx, create=True):
                         par_path=ctx.par_path, params=params,
                         grp_aliases=ctx.info["grp_aliases"], create=create)
 
-    # 2. Run / submit / stage-only.
+    # 2. Write the per-rundir record before anything is run or submitted, so a
+    #    submitted job always has its record.
+    _stage.write_record(rundir, params, ctx.command, ctx.executable, "staged", ctx.git_hash)
+
+    # 3. Run / submit / stage-only, then record the status (and the job id).
+    status, fields = "staged", {}
     if ctx.submit:
         _hpc.preparejob(ctx.template, rundir, ctx.executable, ctx.qos, ctx.mem,
                         ctx.wall, ctx.partition, ctx.account, ctx.omp, ctx.cpus,
                         ctx.jobname, ctx.email, ctx.mail_type, ctx.sbatch)
+        status = "prepared"
         if ctx.run:
-            _hpc.submitjob(rundir)
-            status = "submitted"
-        else:
-            status = "prepared"
-    else:
-        if ctx.run:
-            _hpc.runjob(rundir, ctx.executable, ctx.omp)
-            status = "running"
-        else:
-            status = "staged"
+            out = _hpc.submitjob(rundir)
+            status, fields = "submitted", {"job_id": out.split()[-1] if out else None}
+    elif ctx.run:
+        _hpc.runjob(rundir, ctx.executable, ctx.omp)
+        status = "running"
 
-    # 3. Write the per-rundir record.
-    _stage.write_record(rundir, params, ctx.command, ctx.executable, status)
+    if status != "staged":
+        _stage.update_record(rundir, status=status, **fields)
 
     return status

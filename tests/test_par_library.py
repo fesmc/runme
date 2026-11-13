@@ -158,7 +158,7 @@ def test_ensemble_members_each_get_group(tmp_path, monkeypatch):
             "par_library": ["lib.nml"]}
     ctx = Namespace(dry_run=False, submit=False, run=False, info=info,
                     exe_path="model.x", exe_alias=None, par_path=None,
-                    command=["runme"], executable="./model.x")
+                    command=["runme"], executable="./model.x", git_hash="abc123")
     xparams = MultiParam([Param.parse("idx_a.f_min=0,0.2")]).product()
     _ensemble.run(ctx, xparams, {"ctrl.time_end": 10.0}, "ens")
     for i, f_min in enumerate([0.0, 0.2]):
