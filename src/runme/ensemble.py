@@ -115,6 +115,16 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
     fixed_vals = list(fixed.values())
     all_names = ens_names + fixed_names
 
+    if indices is None:
+        indices = list(range(xparams.size))
+    rundirs = {i: _member_rundir(expdir, i, ens_names, list(xparams.pset_as_array(i)), autodir)
+               for i in indices}
+
+    # Before anything is written: no member directory may hold a job still in the queue.
+    if not ctx.dry_run:
+        _run.check_free(list(rundirs.values()) +
+                        ([os.path.join(expdir, "default")] if include_default else []))
+
     # Write the full-ensemble parameter tables once (describe every member).
     if not ctx.dry_run:
         os.makedirs(expdir, exist_ok=True)
@@ -122,9 +132,6 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
         all_rows_full = [r + fixed_vals for r in ens_rows_full]
         _write_table(os.path.join(expdir, "params.txt"), all_names, all_rows_full)
         _write_table(os.path.join(expdir, "params_ensemble.txt"), ens_names, ens_rows_full)
-
-    if indices is None:
-        indices = list(range(xparams.size))
 
     # A job array: every member is prepared (its own job.submit, for resubmitting
     # it alone), then one array job runs them all.
@@ -143,8 +150,8 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
         member_params = odict(zip(ens_names, ens_row))
         member_params.update(fixed)
 
-        rundir = _member_rundir(expdir, i, ens_names, ens_row, autodir)
-        _run.execute_one(rundir, member_params, member_ctx, create=True)
+        rundir = rundirs[i]
+        _run.execute_one(rundir, member_params, member_ctx, create=True, check=False)
         array_rows.append((i, rundir))
 
         if not ctx.dry_run:
@@ -157,7 +164,7 @@ def run(ctx, xparams, fixed, expdir, indices=None, autodir=False, include_defaul
     # Optional default member: fixed params only, staged under "default".
     if include_default:
         rundir = os.path.join(expdir, "default")
-        _run.execute_one(rundir, odict(fixed), member_ctx, create=True)
+        _run.execute_one(rundir, odict(fixed), member_ctx, create=True, check=False)
         array_rows.append((xparams.size, rundir))   # array index of the default member: one past the last
         if not ctx.dry_run:
             _stage.write_run_tables(rundir, fixed_names, fixed_vals, runid="default")

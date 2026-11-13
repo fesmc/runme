@@ -241,7 +241,9 @@ self-describing and contains:
   the model command line, the applied parameters, the git revision, and a status
   (`staged` / `prepared` / `running` / `submitted`, with the Slurm `job_id`). It is
   written before the job is run or submitted; the git revision is read first of all,
-  so if `git` is unavailable in a git project runme stops before doing anything;
+  so if `git` is unavailable in a git project runme stops before doing anything.
+  runme also refuses, before doing anything, a run directory (or an ensemble with a
+  member directory) whose recorded job is still in the Slurm queue;
 - `params.txt` — a one-row table of the parameter names and values for this run;
 - `info.txt` — the same row prefixed with the `runid` and suffixed with the
   `rundir`, so a directory can be located and loaded uniformly.
