@@ -83,6 +83,17 @@ def preparejob(path_template, rundir, cmd, qos, mem, wall, partition, account, o
     return
 
 
+def queued_state(job):
+    """The Slurm state of ``job`` (e.g. ``PENDING``, ``RUNNING``) while it is in the
+    queue, else None (finished, unknown to Slurm, or no ``squeue`` on this machine)."""
+    try:
+        out = subp.check_output(['squeue', '-h', '-j', str(job), '-o', '%T'], stderr=subp.DEVNULL)
+    except (OSError, subp.CalledProcessError):
+        return None
+    states = out.decode("utf-8").split()
+    return states[0] if states else None
+
+
 def submitjob(rundir, nm_jobscript='job.submit'):
     """Submit a job to a HPC queue (sbatch) with a template job script."""
     cmd_job = "cd {} && sbatch {}".format(rundir, nm_jobscript)
