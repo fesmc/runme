@@ -100,18 +100,19 @@ def stage_rundir(rundir, info, exe_path, exe_alias, par_path=None, params=None,
     return par_paths_rundir
 
 
-def write_record(rundir, params, command, exe_command, status):
+def write_record(rundir, params, command, exe_command, status, git_hash):
     """Write the per-rundir ``runme.json`` record.
 
     Captures the invocation, the executable command, the applied parameters, the
-    git revision, and a status. Replaces the old ``run_info.txt``.
+    git revision (``git_revision``, resolved once per invocation), and a status.
+    Replaces the old ``run_info.txt``.
     """
     record = {
         "command": command,           # the runme invocation (sys.argv)
         "exe_command": exe_command,   # the model executable command line
         "params": params or {},
         "rundir": rundir,
-        "git_hash": get_git_revision_hash() if os.path.isdir(".git") else "Not under git version control.",
+        "git_hash": git_hash,
         "time": str(datetime.datetime.now()),
         "runme_version": __version__,
         "status": status,
@@ -238,6 +239,17 @@ def makedirs(dirname, remove):
     return
 
 
-def get_git_revision_hash():
-    githash = subp.check_output(['git', 'rev-parse', 'HEAD']).strip()
-    return githash.decode("ascii")
+def git_revision():
+    """The git revision of the project (the current directory), for the run records.
+
+    Resolved before anything is staged or submitted: when the project is a git
+    repository but ``git`` fails (e.g. not on the PATH), runme stops here, with
+    nothing done, instead of after the job is submitted.
+    """
+    if not os.path.isdir(".git"):
+        return "Not under git version control."
+    try:
+        return subp.check_output(['git', 'rev-parse', 'HEAD'], stderr=subp.STDOUT).strip().decode("ascii")
+    except (OSError, subp.CalledProcessError) as error:
+        sys.exit("error: cannot read the git revision of {} ({}); nothing was staged or "
+                 "submitted. Make git available (e.g. module load git) and rerun.".format(os.getcwd(), error))

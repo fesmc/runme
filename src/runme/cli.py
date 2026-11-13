@@ -245,6 +245,8 @@ def build_context(args, hpc_config, queues_all, info):
     copy_exec = True       # run the executable from inside the run directory
     with_profiler = False  # vtune profiler prefix (disabled)
 
+    git_hash = _stage.git_revision()   # first: a failure stops runme before anything is done
+
     exe_path = args.exe
     if exe_path in info["exe_aliases"]:
         exe_path = info["exe_aliases"].get(exe_path)
@@ -329,6 +331,7 @@ def build_context(args, hpc_config, queues_all, info):
         template=template,
         array=getattr(args, 'array', None),
         command=" ".join(sys.argv),
+        git_hash=git_hash,
     )
 
 

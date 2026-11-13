@@ -54,7 +54,7 @@ def _ctx(tmp_path, run):
         info=info, exe_path=str(exe), exe_alias=None, par_path=str(par), executable="./model.x par.nml",
         run=run, submit=True, dry_run=False, qos="normal", partition="compute", wall="01:00:00", mem=None,
         account="acc", omp=2, cpus=None, sbatch=[], jobname="job", email="", mail_type=[],
-        template=TEMPLATE, array=3, command="runme test")
+        template=TEMPLATE, array=3, command="runme test", git_hash="abc123")
 
 
 def test_ensemble_array_prepared(tmp_path, monkeypatch):
